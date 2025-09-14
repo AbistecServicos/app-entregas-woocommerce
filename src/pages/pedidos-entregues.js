@@ -682,32 +682,39 @@ export default function PedidosEntregues() {
         </div>
       </div>
 
-      {/* Estilos inline para mobile */}
-      <style jsx>{`
-        @media (max-width: 768px) {
-          .mobile-optimized :global(*) {
-            font-size: 14px !important;
-          }
-          .mobile-header :global(*) {
-            padding: 12px 10px !important;
-          }
-          .mobile-field :global(*) {
-            padding: 10px !important;
-            font-size: 14px !important;
-          }
-          .mobile-button :global(*) {
-            padding: 10px 12px !important;
-            font-size: 14px !important;
-          }
-          .mobile-text-small :global(*) {
-            font-size: 13px !important;
-          }
-          .mobile-checkbox :global(*) {
-            width: 18px !important;
-            height: 18px !important;
-          }
-        }
-      `}</style>
+{/* Estilos inline para mobile */}
+<style jsx>{`
+  @media (max-width: 768px) {
+    .mobile-optimized :global(*) {
+      font-size: 14px !important;
+    }
+    .mobile-header :global(*) {
+      padding: 0px 10px !important;
+    }
+    .mobile-field :global(*) {
+      padding: 10px !important;
+      font-size: 14px !important;
+    }
+    .mobile-button :global(*) {
+      padding: 10px 12px !important;
+      font-size: 14px !important;
+    }
+    .mobile-text-small :global(*) {
+      font-size: 13px !important;
+    }
+    .mobile-checkbox :global(*) {
+      width: 18px !important;
+      height: 18px !important;
+    }
+  }
+
+  /* Estilos para tablet/PC (acima de 768px) - mantém o padrão */
+  @media (min-width: 769px) {
+    .mobile-header :global(*) {
+      padding: 12px 10px !important; /* Valor original para tablet/PC */
+    }
+  }
+`}</style>
     </div>
   );
 }
