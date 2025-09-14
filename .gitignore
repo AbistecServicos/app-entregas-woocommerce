@@ -1,0 +1,8 @@
+# Ignorar pasta gerada pelo Next.js
+.next/
+# Ignorar node_modules
+node_modules/
+# Ignorar ambiente local
+.env.local
+# Ignorar logs ou arquivos temporários
+*.log
