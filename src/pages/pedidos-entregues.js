@@ -149,11 +149,8 @@ const ModalDetalhesPedido = ({ pedido, isOpen, onClose }) => {
  * Carrega uma imagem a partir de uma URL e retorna dados base64 com formato detectado
  */
 const carregarImagem = async (url) => {
-  console.log('🖼️ Tentando carregar imagem:', url);
-  
   try {
     if (!url || typeof url !== 'string' || !url.startsWith('http')) {
-      console.warn('❌ URL de imagem inválida:', url);
       return null;
     }
 
@@ -161,20 +158,15 @@ const carregarImagem = async (url) => {
       ? `${url}&t=${Date.now()}`
       : `${url}?t=${Date.now()}`;
 
-    console.log('🔗 URL com timestamp:', urlComTimestamp);
-
     const response = await fetch(urlComTimestamp);
-    console.log('📡 Status da resposta:', response.status, response.statusText);
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
     
     const blob = await response.blob();
-    console.log('📊 Tipo do blob:', blob.type, 'Tamanho:', blob.size, 'bytes');
     
     if (!blob.type.startsWith('image/')) {
-      console.warn('❌ Não é uma imagem:', blob.type);
       return null;
     }
     
@@ -182,33 +174,25 @@ const carregarImagem = async (url) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         if (reader.result && typeof reader.result === 'string') {
-          console.log('✅ Imagem carregada com sucesso!');
           const img = new Image();
           img.onload = () => {
-            console.log('📐 Dimensões da imagem:', img.width, 'x', img.height);
             resolve({
               data: reader.result,
               format: blob.type.split('/')[1].toUpperCase()
             });
           };
           img.onerror = () => {
-            console.warn('❌ Erro ao carregar imagem no elemento img');
             resolve(null);
           };
           img.src = reader.result;
         } else {
-          console.warn('❌ Reader result inválido');
           resolve(null);
         }
       };
-      reader.onerror = (error) => {
-        console.error('❌ Erro no FileReader:', error);
-        reject(error);
-      };
+      reader.onerror = reject;
       reader.readAsDataURL(blob);
     });
   } catch (error) {
-    console.error('❌ Erro ao carregar logo:', error.message);
     return null;
   }
 };
@@ -217,9 +201,6 @@ const carregarImagem = async (url) => {
  * Gera recibos em PDF agrupados por loja
  */
 const gerarRecibosPDF = async (pedidosSelecionados, todosPedidos) => {
-  console.log('📄 Iniciando geração de PDF');
-  console.log('🎯 Pedidos selecionados:', Array.from(pedidosSelecionados));
-  
   if (pedidosSelecionados.size === 0) {
     alert('Selecione pelo menos um pedido para gerar recibos.');
     return;
@@ -231,9 +212,6 @@ const gerarRecibosPDF = async (pedidosSelecionados, todosPedidos) => {
     Array.from(pedidosSelecionados).forEach(id => {
       const pedido = todosPedidos.find(p => p.id === id);
       if (pedido) {
-        console.log(`🏪 Processando pedido ${pedido.id_loja_woo} da loja ${pedido.loja_nome}`);
-        console.log(`🖼️ Logo URL: ${pedido.loja_logo}`);
-        
         const lojaId = pedido.id_loja;
         if (!pedidosPorLoja[lojaId]) {
           pedidosPorLoja[lojaId] = {
@@ -242,7 +220,6 @@ const gerarRecibosPDF = async (pedidosSelecionados, todosPedidos) => {
             entregador: pedido.aceito_por_nome,
             pedidos: []
           };
-          console.log(`✅ Novo grupo criado para loja ${lojaId}`);
         }
         pedidosPorLoja[lojaId].pedidos.push({
           id_loja_woo: pedido.id_loja_woo,
@@ -250,8 +227,6 @@ const gerarRecibosPDF = async (pedidosSelecionados, todosPedidos) => {
         });
       }
     });
-
-    console.log('📋 Grupos por loja:', pedidosPorLoja);
 
     // Criar PDF com configurações de alta qualidade
     const pdf = new jsPDF({
@@ -433,12 +408,6 @@ export default function PedidosEntregues() {
       const { data, error } = await query;
       if (error) throw error;
       
-      // Debug: verificar dados carregados
-      console.log('📦 Dados carregados do Supabase:');
-      data.forEach(pedido => {
-        console.log(`Pedido ${pedido.id_loja_woo} - Loja: ${pedido.loja_nome} - Logo: ${pedido.loja_logo}`);
-      });
-      
       setPedidos(data || []);
     } catch (err) {
       console.error('Erro ao carregar pedidos:', err.message);
@@ -576,7 +545,7 @@ export default function PedidosEntregues() {
   // ============================================================================
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="bg-gray-50 min-h-screen mobile-optimized">
       {/* Modal de Detalhes */}
       <ModalDetalhesPedido
         pedido={pedidoSelecionado}
@@ -584,23 +553,34 @@ export default function PedidosEntregues() {
         onClose={fecharModal}
       />
 
-      {/* Cabeçalho Fixo */}
-      <div className="sticky top-0 z-40 bg-white shadow-md p-4 border-b border-purple-200">
-        <h1 className="text-2xl font-bold text-purple-800 mb-4">Pedidos Entregues</h1>
+      {/* Cabeçalho Otimizado para Mobile */}
+      <div className="bg-white shadow-md rounded-lg p-3 mb-3 sticky top-2 z-10 mobile-header">
+        <div className="flex justify-between items-center mb-3">
+          <h1 className="text-xl font-bold text-purple-800">Pedidos Entregues</h1>
+          <div className="flex items-center">
+            <span className="text-sm text-gray-600 mr-2">{pedidosSelecionados.size}</span>
+            <div className="text-lg font-semibold text-green-600">
+              R$ {totalSelecionados.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+          </div>
+        </div>
 
-        {/* Filtros */}
-        <div className="flex flex-col md:flex-row gap-4 mb-4">
-          <input
-            type="text"
-            placeholder="Entregador"
+        {/* Filtros sem rótulos */}
+        <div className="grid grid-cols-1 gap-2 mb-3">
+          <select
             value={filtroEntregador}
             onChange={(e) => setFiltroEntregador(e.target.value)}
-            className="p-2 border border-purple-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          />
+            className="w-full p-2 border border-gray-300 rounded mobile-field"
+          >
+            <option value="">Todos Entregadores</option>
+            {[...new Set(pedidos.map(p => p.aceito_por_nome).filter(Boolean))].map((nome, index) => (
+              <option key={index} value={nome}>{nome}</option>
+            ))}
+          </select>
           <select
             value={filtroLoja}
             onChange={(e) => setFiltroLoja(e.target.value)}
-            className="p-2 border border-purple-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full p-2 border border-gray-300 rounded mobile-field"
           >
             <option value="">Todas Lojas</option>
             {lojasUnicas.map(loja => (
@@ -610,49 +590,40 @@ export default function PedidosEntregues() {
           <select
             value={filtroStatus}
             onChange={(e) => setFiltroStatus(e.target.value)}
-            className="p-2 border border-purple-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full p-2 border border-gray-300 rounded mobile-field"
           >
-            <option value="">Todos</option>
+            <option value="">Todos Status</option>
             <option value="true">Pago</option>
             <option value="false">Pendente</option>
           </select>
         </div>
 
-        {/* Contadores */}
-        <div className="bg-purple-100 p-3 rounded mb-4 flex flex-col md:flex-row justify-between items-center text-sm">
-          <span className="font-semibold text-purple-800">Selecionados: {pedidosSelecionados.size}</span>
-          <span className="font-semibold text-purple-800">
-            Total Selecionados: R$ {totalSelecionados.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-        </div>
-
-        {/* Data e Botões */}
-        <div className="flex flex-col md:flex-row gap-4 mb-4 items-center">
+        {/* Data e Botões na mesma linha */}
+        <div className="flex gap-2 items-center">
           <input
             type="date"
             value={dataPagamento}
             onChange={(e) => setDataPagamento(e.target.value)}
-            className="p-2 border border-purple-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="flex-grow p-2 border border-gray-300 rounded mobile-field"
           />
           <button 
             onClick={atualizarPedidos} 
-            className="bg-purple-600 text-white p-2 rounded hover:bg-purple-700 transition-colors font-semibold"
+            className="bg-purple-600 text-white p-2 rounded hover:bg-purple-700 transition-colors font-semibold mobile-button flex-grow text-center"
           >
             Atualizar
           </button>
           <button 
             onClick={async () => await gerarRecibosPDF(pedidosSelecionados, pedidos)}
-            className="bg-green-600 text-white p-2 rounded hover:bg-green-700 transition-colors font-semibold"
+            className="bg-green-600 text-white p-2 rounded hover:bg-green-700 transition-colors font-semibold mobile-button flex-grow text-center"
           >
-            Gerar Recibos
+            Recibo
           </button>
         </div>
       </div>
 
-      {/* Conteúdo Rolável */}
-      <div className="p-4">
-        {/* Cards de Pedidos */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Lista de Pedidos */}
+      <div className="container mx-auto px-2">
+        <div className="grid grid-cols-1 gap-3">
           {isLoading ? (
             <div className="col-span-full text-center py-8">
               <p className="text-purple-600">Carregando...</p>
@@ -663,31 +634,27 @@ export default function PedidosEntregues() {
             </div>
           ) : (
             pedidos.map(pedido => (
-              <div key={pedido.id} className="bg-white border border-purple-200 rounded-lg shadow-lg p-4 hover:shadow-xl transition-all duration-300 hover:border-purple-400">
-                <div className="flex items-center mb-3">
+              <div key={pedido.id} className="bg-white rounded-lg shadow card-pedido p-3">
+                <div className="flex items-center mb-2">
                   <input
                     type="checkbox"
                     checked={pedidosSelecionados.has(pedido.id)}
                     onChange={(e) => handleSelecionarPedido(pedido.id, e.target.checked)}
-                    className="mr-3 h-5 w-5 text-purple-600 focus:ring-purple-500 border-purple-300 rounded"
+                    className="mobile-checkbox h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                   />
-                  <div className="flex-1">
+                  <div className="flex-1 ml-2">
                     <button
                       onClick={() => abrirModalDetalhes(pedido)}
-                      className="text-lg font-bold text-purple-800 hover:text-purple-600 hover:underline text-left"
+                      className="text-base font-bold text-purple-800 hover:text-purple-600 hover:underline text-left"
                     >
                       Pedido #{pedido.id_loja_woo}
                     </button>
-                    <h4 className="text-md font-semibold text-blue-800">{pedido.loja_nome}</h4>
+                    <p className="text-sm font-semibold text-blue-800 mobile-text-small">{pedido.loja_nome}</p>
                   </div>
                 </div>
-                <div className="ml-8 text-sm space-y-2">
-                  <p className="text-gray-700">
-                    <span className="font-semibold">Entregador:</span> {pedido.aceito_por_nome || 'Não informado'}
-                  </p>
-                  <p className="text-gray-700">
-                    <span className="font-semibold">Pago em:</span> {formatarDataParaExibicao(pedido.data_pagamento)}
-                  </p>
+                <div className="ml-6 space-y-1 mobile-text-small">
+                  <p><span className="font-semibold">Entregador:</span> {pedido.aceito_por_nome || 'Não informado'}</p>
+                  <p><span className="font-semibold">Pago em:</span> {formatarDataParaExibicao(pedido.data_pagamento)}</p>
                   <p className="flex items-center">
                     <span className="font-semibold mr-1">Pagamento:</span> 
                     {pedido.status_pagamento ? (
@@ -705,7 +672,7 @@ export default function PedidosEntregues() {
                       min="0"
                       value={pedido.frete_pago || 0.0}
                       onChange={(e) => handleAtualizarFrete(pedido.id, e.target.value)}
-                      className="w-20 p-1 border border-purple-300 rounded ml-1 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-16 p-1 border border-gray-300 rounded ml-1 focus:ring-2 focus:ring-purple-500 focus:border-transparent mobile-text-small"
                     />
                   </p>
                 </div>
@@ -714,6 +681,33 @@ export default function PedidosEntregues() {
           )}
         </div>
       </div>
+
+      {/* Estilos inline para mobile */}
+      <style jsx>{`
+        @media (max-width: 768px) {
+          .mobile-optimized :global(*) {
+            font-size: 14px !important;
+          }
+          .mobile-header :global(*) {
+            padding: 12px 10px !important;
+          }
+          .mobile-field :global(*) {
+            padding: 10px !important;
+            font-size: 14px !important;
+          }
+          .mobile-button :global(*) {
+            padding: 10px 12px !important;
+            font-size: 14px !important;
+          }
+          .mobile-text-small :global(*) {
+            font-size: 13px !important;
+          }
+          .mobile-checkbox :global(*) {
+            width: 18px !important;
+            height: 18px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
