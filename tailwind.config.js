@@ -1,12 +1,21 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    './src/**/*.{js,ts,jsx,tsx}',
-    './pages/**/*.{js,ts,jsx,tsx}',
-    './components/**/*.{js,ts,jsx,tsx}',
+    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}", // ← Mantenha esta linha também
+    "./components/**/*.{js,ts,jsx,tsx,mdx}", // ← Mantenha esta linha também
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        woo: {
+          purple: '#7f54b3',
+          purpleDark: '#6b3fa0', 
+          purpleLight: '#f0e6ff',
+        }
+      }
+    },
   },
   plugins: [],
 }
