@@ -1,38 +1,36 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
+// middleware.js (versão simplificada)
 import { NextResponse } from 'next/server';
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
 
 export async function middleware(req) {
   const res = NextResponse.next();
   const supabase = createMiddlewareClient({ req, res });
+  
+  // 1. Verifica se usuário está autenticado
+  const { data: { user } } = await supabase.auth.getUser();
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  // 2. Lista de rotas que requerem login
+  const requiresAuth = [
+    '/pedidos-pendentes',
+    '/pedidos-aceitos', 
+    '/pedidos-entregues',
+    '/todos-pedidos',
+    '/admin'
+  ];
 
-  // Páginas que requerem autenticação
-  const protectedRoutes = ['/admin', '/pedidos-pendentes', '/pedidos-aceitos', '/pedidos-entregues', '/orders'];
-
-  // Se não está autenticado e tenta acessar rota protegida
-  if (!session && protectedRoutes.some(route => req.nextUrl.pathname.startsWith(route))) {
+  // 3. Se rota requer auth e usuário não está logado → redireciona
+  if (requiresAuth.includes(req.nextUrl.pathname) && !user) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 
-  // Se está autenticado e tenta acessar login/cadastro
-  if (session && (req.nextUrl.pathname === '/login' || req.nextUrl.pathname === '/cadastro')) {
-    return NextResponse.redirect(new URL('/dashboard', req.url));
+  // 4. Se usuário logado tenta acessar login → redireciona para dashboard
+  if (req.nextUrl.pathname === '/login' && user) {
+    return NextResponse.redirect(new URL('/pedidos-pendentes', req.url));
   }
 
   return res;
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: ['/pedidos-pendentes', '/pedidos-aceitos', '/pedidos-entregues', '/todos-pedidos', '/admin', '/login'],
 };

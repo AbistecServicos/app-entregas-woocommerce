@@ -3,28 +3,46 @@ import { supabase } from '../lib/supabase';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 
+// ==============================================================================
+// COMPONENTE PRINCIPAL - PÁGINA DE LOGIN
+// ==============================================================================
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false); // Novo estado para controlar visibilidade da senha
-  const router = useRouter();
+  // ============================================================================
+  // 1. ESTADOS DO COMPONENTE
+  // ============================================================================
+  const [email, setEmail] = useState('');              // Email do usuário
+  const [password, setPassword] = useState('');        // Senha do usuário
+  const [loading, setLoading] = useState(false);       // Estado de carregamento
+  const [error, setError] = useState('');              // Mensagens de erro
+  const [showPassword, setShowPassword] = useState(false); // Controla visibilidade da senha
+  const router = useRouter();                          // Router para navegação
 
+  // ============================================================================
+  // 2. FUNÇÃO PRINCIPAL: LOGIN COM EMAIL/SENHA
+  // ============================================================================
   const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+    e.preventDefault(); // Previne comportamento padrão do formulário
+    setLoading(true);   // Inicia estado de carregamento
+    setError('');       // Limpa erros anteriores
 
     try {
+      // ========================================================================
+      // 2.1. AUTENTICAÇÃO NO SUPABASE
+      // ========================================================================
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
-      if (authError) throw authError;
+      if (authError) throw authError; // Se houver erro na autenticação
 
-      // PRIMEIRO: Verificar se é ADMIN
+      // ========================================================================
+      // 2.2. VERIFICAÇÃO SE É ADMINISTRADOR
+      // ========================================================================
+      /**
+       * Administradores têm acesso total e não precisam de vinculação com lojas
+       * Verificamos pela flag is_admin na tabela usuarios
+       */
       const { data: usuario, error: userError } = await supabase
         .from('usuarios')
         .select('is_admin')
@@ -33,43 +51,86 @@ export default function Login() {
 
       if (userError) throw userError;
 
+      // Se for admin, redireciona diretamente para painel admin
       if (usuario.is_admin) {
         router.push('/admin');
-        return;
+        return; // Interrompe a execução aqui
       }
 
-      // SEGUNDO: Se não for admin, verificar associação com loja
-      const { data: associacao, error: assocError } = await supabase
+      // ========================================================================
+      // 2.3. VERIFICAÇÃO DE VINCULO COM LOJAS (NÃO-ADMIN)
+      // ========================================================================
+      /**
+       * Para usuários não-admin, verificamos se estão vinculados a alguma loja ativa
+       * UM GERENTE só pode ter UMA loja
+       * UM ENTREGADOR pode ter MÚLTIPLAS lojas
+       */
+      const { data: associacoes, error: assocError } = await supabase
         .from('loja_associada')
-        .select('funcao, status_vinculacao, id_loja')
+        .select('funcao, id_loja, loja_nome')
         .eq('uid_usuario', authData.user.id)
-        .eq('status_vinculacao', 'ativo')
-        .single();
+        .eq('status_vinculacao', 'ativo');
+        // ⚠️ REMOVIDO .single() para permitir múltiplas lojas
 
-      if (assocError || !associacao) {
+      // Verifica erros na consulta
+      if (assocError) {
+        throw new Error('Erro ao verificar permissões: ' + assocError.message);
+      }
+
+      // Verifica se usuário tem pelo menos uma loja ativa
+      if (!associacoes || associacoes.length === 0) {
         throw new Error('Usuário não possui acesso ativo ao sistema. Entre em contato com o administrador.');
       }
 
-      // REDIRECIONAR BASEADO NA FUNÇÃO
-      switch (associacao.funcao) {
+      // ========================================================================
+      // 2.4. VALIDAÇÃO ESPECÍFICA PARA GERENTES
+      // ========================================================================
+      /**
+       * Gerentes não podem estar vinculados a múltiplas lojas
+       * Se encontrar um gerente com mais de uma loja, é um erro de configuração
+       */
+      const gerentes = associacoes.filter(assoc => assoc.funcao === 'gerente');
+      if (gerentes.length > 0 && associacoes.length > 1) {
+        throw new Error('Gerente não pode estar associado a múltiplas lojas. Contate o administrador.');
+      }
+
+      // ========================================================================
+      // 2.5. REDIRECIONAMENTO BASEADO NA FUNÇÃO
+      // ========================================================================
+      /**
+       * Usa a PRIMEIRA associação para determinar o redirecionamento
+       * Para entregadores com múltiplas lojas, todas serão consideradas depois
+       */
+      const primeiraAssociacao = associacoes[0];
+      
+      switch (primeiraAssociacao.funcao) {
         case 'gerente':
-          router.push('/pedidos-pendentes');
+          router.push('/todos-pedidos'); // Gerente vai para gestão completa
           break;
         case 'entregador':
-          router.push('/orders');
+          router.push('/pedidos-pendentes'); // Entregador vai para pedidos disponíveis
           break;
         default:
-          throw new Error('Função não reconhecida: ' + associacao.funcao);
+          throw new Error('Função não reconhecida: ' + primeiraAssociacao.funcao);
       }
 
     } catch (error) {
+      // ========================================================================
+      // 2.6. TRATAMENTO DE ERROS
+      // ========================================================================
       setError(error.message);
       console.error('Erro no login:', error);
     } finally {
-      setLoading(false);
+      // ========================================================================
+      // 2.7. FINALIZAÇÃO (EXECUTA SEMPRE, COM SUCESSO OU ERRO)
+      // ========================================================================
+      setLoading(false); // Finaliza estado de carregamento
     }
   };
 
+  // ============================================================================
+  // 3. FUNÇÃO: LOGIN COM GOOGLE (OAUTH)
+  // ============================================================================
   const handleGoogleLogin = async () => {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -81,10 +142,16 @@ export default function Login() {
     }
   };
 
+  // ============================================================================
+  // 4. RENDERIZAÇÃO DO COMPONENTE
+  // ============================================================================
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-purple-800 py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
       <div className="max-w-md w-full mx-auto">
-        {/* Logo */}
+        
+        {/* ==================================================================== */}
+        {/* LOGO E IDENTIDADE VISUAL */}
+        {/* ==================================================================== */}
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-white rounded-full mx-auto mb-4 flex items-center justify-center">
             <span className="text-3xl text-purple-600">🚚</span>
@@ -93,19 +160,27 @@ export default function Login() {
           <p className="text-purple-200 mt-2">Sistema de Gestão de Entregas</p>
         </div>
 
-        {/* Card de Login */}
+        {/* ==================================================================== */}
+        {/* CARD PRINCIPAL DE LOGIN */}
+        {/* ==================================================================== */}
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <h3 className="text-2xl font-bold text-gray-800 text-center mb-6">
             Acessar Sistema
           </h3>
 
+          {/* MENSAGENS DE ERRO */}
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
               {error}
             </div>
           )}
 
+          {/* ================================================================ */}
+          {/* FORMULÁRIO DE LOGIN */}
+          {/* ================================================================ */}
           <form onSubmit={handleLogin} className="space-y-6">
+            
+            {/* CAMPO EMAIL */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email
@@ -118,9 +193,11 @@ export default function Login() {
                 className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 required
                 placeholder="seu@email.com"
+                disabled={loading}
               />
             </div>
 
+            {/* CAMPO SENHA COM BOTÃO DE VISUALIZAÇÃO */}
             <div className="relative">
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Senha
@@ -134,12 +211,15 @@ export default function Login() {
                   className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   required
                   placeholder="Sua senha"
+                  disabled={loading}
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center mt-1"
                   onClick={() => setShowPassword(!showPassword)}
+                  disabled={loading}
                 >
+                  {/* Ícone dinâmico (mostrar/ocultar senha) */}
                   {showPassword ? (
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -154,16 +234,19 @@ export default function Login() {
               </div>
             </div>
 
+            {/* BOTÃO DE SUBMIT */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition disabled:opacity-50"
+              className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
 
-          {/* Divisor */}
+          {/* ================================================================ */}
+          {/* LOGIN ALTERNATIVO (GOOGLE) */}
+          {/* ================================================================ */}
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -174,10 +257,10 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Google Login */}
             <button
               onClick={handleGoogleLogin}
-              className="w-full mt-4 bg-white border border-gray-300 text-gray-700 py-3 px-4 rounded-lg font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition flex items-center justify-center"
+              disabled={loading}
+              className="w-full mt-4 bg-white border border-gray-300 text-gray-700 py-3 px-4 rounded-lg font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -189,19 +272,29 @@ export default function Login() {
             </button>
           </div>
 
-          {/* Links extras */}
+          {/* ================================================================ */}
+          {/* LINKS EXTRAS */}
+          {/* ================================================================ */}
           <div className="mt-6 text-center space-y-3">
-            <Link href="/cadastro" className="text-purple-600 hover:text-purple-800 text-sm font-medium">
+            <Link 
+              href="/cadastro" 
+              className="text-purple-600 hover:text-purple-800 text-sm font-medium"
+            >
               Criar nova conta
             </Link>
             <br />
-            <Link href="/recuperar-senha" className="text-gray-500 hover:text-gray-700 text-sm">
+            <Link 
+              href="/recuperar-senha" 
+              className="text-gray-500 hover:text-gray-700 text-sm"
+            >
               Esqueceu sua senha?
             </Link>
           </div>
         </div>
 
-        {/* Footer */}
+        {/* ==================================================================== */}
+        {/* FOOTER */}
+        {/* ==================================================================== */}
         <div className="text-center mt-8">
           <p className="text-purple-200 text-sm">
             © 2024 EntregasWoo - Sistema de Gestão
