@@ -132,10 +132,15 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         {/**
          * Cabeçalho com logo e nome do sistema
          * Border inferior para separação visual
+         * AGORA COM LINK PARA PÁGINA INICIAL
          */}
         <div className="p-6 border-b border-purple-700">
-          <h1 className="text-2xl font-bold">EntregasWoo</h1>
-          <p className="text-purple-300 text-sm">Sistema de Gestão</p>
+          <Link href="/" passHref>
+            <div className="cursor-pointer">
+              <h1 className="text-2xl font-bold">EntregasWoo</h1>
+              <p className="text-purple-300 text-sm">Sistema de Gestão</p>
+            </div>
+          </Link>
         </div>
 
         {/* ================================================================== */}
