@@ -21,7 +21,7 @@ export default function HomePage() {
       // Encontra o elemento alvo pelo ID
       const targetElement = document.querySelector(targetId);
       if (targetElement) {
-        // Realiza a rolagem suave com offset para compensar o cabeçalho fixo
+        // Realiza a rolagem suave com offset para compensar o cabeçalho
         window.scrollTo({
           top: targetElement.offsetTop - 80, // Ajuste de 80px para o cabeçalho
           behavior: 'smooth'
@@ -50,22 +50,13 @@ export default function HomePage() {
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
       </Head>
 
-      {/* Cabeçalho da página com menu de navegação */}
+      {/* Cabeçalho da página com apenas o título */}
       <header>
         <div className="container">
           <div className="header-content">
             <div className="logo">
               <h1>VendasWoo <span>+ EntregasWoo</span></h1>
             </div>
-            <nav>
-              <ul>
-                <li><Link href="#como-funciona">Como Funciona</Link></li>
-                <li><Link href="#para-lojas">Para Lojas</Link></li>
-                <li><Link href="#para-entregadores">Para Entregadores</Link></li>
-                <li><a href="https://pedidossimples.com.br/vendaswoo/" target="_blank" rel="noopener noreferrer">VendasWoo</a></li>
-                <li><a href="https://wa.me/552132727548" target="_blank" rel="noopener noreferrer">Contato</a></li>
-              </ul>
-            </nav>
           </div>
         </div>
       </header>
@@ -283,14 +274,12 @@ export default function HomePage() {
         header {
           background-color: white;
           box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-          position: sticky;
-          top: 0;
-          z-index: 100;
+          /* Removido o comportamento sticky para fluir com a rolagem */
         }
         
         .header-content {
           display: flex;
-          justify-content: space-between;
+          justify-content: center;
           align-items: center;
           padding: 15px 0;
         }
@@ -569,16 +558,6 @@ export default function HomePage() {
         @media (max-width: 768px) {
           .header-content {
             flex-direction: column;
-          }
-          
-          nav ul {
-            margin-top: 20px;
-            flex-wrap: wrap;
-            justify-content: center;
-          }
-          
-          nav li {
-            margin: 5px 10px;
           }
           
           .hero h2 {
