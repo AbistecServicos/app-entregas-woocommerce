@@ -132,10 +132,10 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         {/**
          * Cabeçalho com logo e nome do sistema
          * Border inferior para separação visual
-         * AGORA COM LINK PARA PÁGINA INICIAL
+         * AGORA COM LINK PARA PÁGINA INICIAL E FECHAMENTO NO MOBILE
          */}
         <div className="p-6 border-b border-purple-700">
-          <Link href="/" passHref>
+          <Link href="/" passHref onClick={handleMenuItemClick}>
             <div className="cursor-pointer">
               <h1 className="text-2xl font-bold">EntregasWoo</h1>
               <p className="text-purple-300 text-sm">Sistema de Gestão</p>
