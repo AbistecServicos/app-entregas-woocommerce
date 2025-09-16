@@ -37,6 +37,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
    */
   const adminItems = [
     { path: '/todos-pedidos', icon: '📊', label: 'Todos os Pedidos' },
+    { path: '/gestao-entregadores', icon: '👥', label: 'Gestão de Entregadores' }, // ✅ NOVO ITEM
     { path: '/admin', icon: '⚙️', label: 'Administração' },
   ];
 
