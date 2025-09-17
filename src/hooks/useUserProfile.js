@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 // ==============================================================================
 /**
  * Hook personalizado para gerenciar dados do usuário logado
- * Responsável por: autenticação, permissões e dados do perfil
+ * Responsável por: autenticação, permissões, dados do perfil e edição
  */
 export const useUserProfile = () => {
   // ============================================================================
@@ -19,6 +19,7 @@ export const useUserProfile = () => {
   const [userLojas, setUserLojas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [updating, setUpdating] = useState(false); // ✅ NOVO: Estado para edição
 
   // ============================================================================
   // 2. EFFECT PRINCIPAL - CARREGAMENTO DOS DADOS
@@ -133,14 +134,153 @@ export const useUserProfile = () => {
   }, []);
 
   // ============================================================================
-  // 3. RETORNO DO HOOK
+  // 3. FUNÇÕES DE EDIÇÃO DE PERFIL
+  // ============================================================================
+  /**
+   * Função para atualizar perfil do usuário
+   * Atualiza tanto tabela 'usuarios' quanto 'loja_associada' quando necessário
+   */
+  const updateUserProfile = async (formData) => {
+    try {
+      setUpdating(true);
+      setError(null);
+
+      // ========================================================================
+      // 3.1. VALIDAÇÃO INICIAL
+      // ========================================================================
+      if (!userProfile || !userProfile.uid) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // ========================================================================
+      // 3.2. ATUALIZAR TABELA USUARIOS (TODOS OS USUÁRIOS)
+      // ========================================================================
+      const { error: userError } = await supabase
+        .from('usuarios')
+        .update({
+          nome_completo: formData.nome_completo,
+          nome_usuario: formData.nome_usuario,
+          telefone: formData.telefone,
+          foto: formData.foto
+        })
+        .eq('uid', userProfile.uid);
+
+      if (userError) throw userError;
+
+      // ========================================================================
+      // 3.3. ATUALIZAR TABELA LOJA_ASSOCIADA (APENAS ENTREGADORES)
+      // ========================================================================
+      if (userRole === 'entregador' && userLojas.length > 0) {
+        const { error: lojaError } = await supabase
+          .from('loja_associada')
+          .update({
+            veiculo: formData.veiculo,
+            carga_maxima: formData.carga_maxima ? parseInt(formData.carga_maxima) : null,
+            perimetro_entrega: formData.perimetro_entrega,
+            nome_completo: formData.nome_completo // Mantém sincronizado
+          })
+          .eq('uid_usuario', userProfile.uid)
+          .eq('id_loja', userLojas[0].id_loja);
+
+        if (lojaError) throw lojaError;
+      }
+
+      // ========================================================================
+      // 3.4. ATUALIZAR ESTADOS LOCAIS
+      // ========================================================================
+      setUserProfile(prev => ({
+        ...prev,
+        nome_completo: formData.nome_completo,
+        nome_usuario: formData.nome_usuario,
+        telefone: formData.telefone,
+        foto: formData.foto
+      }));
+
+      if (userRole === 'entregador' && userLojas.length > 0) {
+        setUserLojas(prev => prev.map(loja => 
+          loja.id_loja === userLojas[0].id_loja ? {
+            ...loja,
+            veiculo: formData.veiculo,
+            carga_maxima: formData.carga_maxima,
+            perimetro_entrega: formData.perimetro_entrega,
+            nome_completo: formData.nome_completo
+          } : loja
+        ));
+      }
+
+      return { success: true, message: 'Perfil atualizado com sucesso!' };
+
+    } catch (error) {
+      // ========================================================================
+      // 3.5. TRATAMENTO DE ERROS NA EDIÇÃO
+      // ========================================================================
+      const errorMsg = 'Erro ao atualizar perfil: ' + error.message;
+      setError(errorMsg);
+      console.error('Erro no updateUserProfile:', error);
+      return { success: false, message: errorMsg };
+    } finally {
+      // ========================================================================
+      // 3.6. FINALIZAÇÃO DA EDIÇÃO
+      // ========================================================================
+      setUpdating(false);
+    }
+  };
+
+  // ============================================================================
+  // 4. FUNÇÃO: RECARREGAR DADOS DO USUÁRIO
+  // ============================================================================
+  /**
+   * Função para recarregar todos os dados do usuário
+   * Útil após edições ou mudanças externas
+   */
+  const reloadUserData = async () => {
+    setLoading(true);
+    try {
+      // Recarregar dados de autenticação
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      setUser(authUser);
+
+      if (authUser) {
+        // Recarregar dados do usuário
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('uid', authUser.id)
+          .single();
+        setUserProfile(usuarioData);
+
+        // Recarregar lojas associadas (apenas não-admin)
+        if (!usuarioData?.is_admin) {
+          const { data: lojaData } = await supabase
+            .from('loja_associada')
+            .select('*')
+            .eq('uid_usuario', authUser.id)
+            .eq('status_vinculacao', 'ativo');
+          setUserLojas(lojaData || []);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao recarregar dados:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================================================
+  // 5. RETORNO DO HOOK
   // ============================================================================
   return { 
+    // Estados principais
     user,
     userProfile, 
     userRole, 
     userLojas, 
     loading, 
-    error 
+    error,
+    updating, // ✅ NOVO: Estado de edição
+    
+    // Funções
+    updateUserProfile, // ✅ NOVO: Função de edição
+    reloadUserData // ✅ NOVO: Função de recarregamento
   };
 };

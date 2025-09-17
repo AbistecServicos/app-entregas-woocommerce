@@ -155,6 +155,7 @@ export default function GestaoEntregadores() {
         .insert({
           uid_usuario: usuario.uid,
           nome_completo: usuario.nome_completo,
+          email_usuario: usuario.email, // ✅ NOVO CAMPO
           funcao: 'entregador',
           id_loja: lojaId,
           loja_nome: lojaNome,
