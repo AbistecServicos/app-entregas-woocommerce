@@ -25,11 +25,12 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
    * Itens base do menu - visíveis para todos os usuários logados
    * Inclui páginas básicas de pedidos
    */
-  const baseItems = [
-    { path: '/pedidos-pendentes', icon: '📋', label: 'Pedidos Pendentes' },
-    { path: '/pedidos-aceitos', icon: '✅', label: 'Pedidos Aceitos' },
-    { path: '/pedidos-entregues', icon: '🚚', label: 'Pedidos Entregues' },
-  ];
+const baseItems = [
+  { path: '/pedidos-pendentes', icon: '📋', label: 'Pedidos Pendentes' },
+  { path: '/pedidos-aceitos', icon: '✅', label: 'Pedidos Aceitos' },
+  { path: '/pedidos-entregues', icon: '🚚', label: 'Pedidos Entregues' },
+  { path: '/perfil', icon: '👤', label: 'Meu Perfil' }, // ✅ NOVO ITEM
+];
 
   /**
    * Itens administrativos - visíveis apenas para gerentes e administradores
