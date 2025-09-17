@@ -29,6 +29,7 @@ const baseItems = [
   { path: '/pedidos-pendentes', icon: '📋', label: 'Pedidos Pendentes' },
   { path: '/pedidos-aceitos', icon: '✅', label: 'Pedidos Aceitos' },
   { path: '/pedidos-entregues', icon: '🚚', label: 'Pedidos Entregues' },
+  { path: '/gestao-entregadores', icon: '👥', label: 'Gestão de Entregadores' }, // ✅ NOVO ITEM
   { path: '/perfil', icon: '👤', label: 'Meu Perfil' }, // ✅ NOVO ITEM
 ];
 
