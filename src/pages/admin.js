@@ -42,152 +42,177 @@ export default function Admin() {
     }
   }, [activeTab]);
 
-  // ============================================================================
-  // 3. FUNÇÕES: CARREGAMENTO DE DADOS
-  // ============================================================================
-  /**
-   * Carrega lista de lojas cadastradas
-   */
-  const loadLojas = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('lojas')
-        .select('*')
-        .order('loja_nome');
-      
-      if (error) throw error;
-      setLojas(data || []);
-    } catch (err) {
-      setError('Erro ao carregar lojas: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+// ============================================================================
+// 3. FUNÇÕES: CARREGAMENTO DE DADOS
+// ============================================================================
+/**
+ * Carrega lista de lojas cadastradas
+ */
+const loadLojas = async () => {
+  try {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('lojas')
+      .select('*')
+      .order('loja_nome');
+    
+    if (error) throw error;
+    setLojas(data || []);
+  } catch (err) {
+    setError('Erro ao carregar lojas: ' + err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
-  /**
-   * Carrega usuários não vinculados a lojas (pendentes)
-   */
-  const loadUsuariosPendentes = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select('*')
-        .not('uid', 'in', 
-          `(select uid_usuario from loja_associada where status_vinculacao = 'ativo')`
-        );
-      
-      if (error) throw error;
-      setUsuariosPendentes(data || []);
-    } catch (err) {
-      setError('Erro ao carregar usuários: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+/**
+ * Carrega usuários não vinculados a lojas (pendentes)
+ */
+const loadUsuariosPendentes = async () => {
+  try {
+    setLoading(true);
+    // ✅ CORREÇÃO: Consulta mais simples para evitar erro de UUID
+    const { data: usuariosAssociados, error: errorAssociados } = await supabase
+      .from('loja_associada')
+      .select('uid_usuario')
+      .eq('status_vinculacao', 'ativo');
 
-  /**
-   * Carrega associações ativas entre usuários e lojas
-   */
-  const loadAssociacoes = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('loja_associada')
-        .select(`
-          *,
-          usuarios:uid_usuario(nome_completo, email),
-          lojas:id_loja(loja_nome)
-        `)
-        .order('ultimo_status_vinculacao', { ascending: false });
-      
-      if (error) throw error;
-      setAssociacoes(data || []);
-    } catch (err) {
-      setError('Erro ao carregar associações: ' + err.message);
-    } finally {
-      setLoading(false);
+    if (errorAssociados) {
+      throw new Error('Erro ao buscar usuários associados: ' + errorAssociados.message);
     }
-  };
 
-  // ============================================================================
-  // 4. FUNÇÕES: AÇÕES DO ADMIN
-  // ============================================================================
-  /**
-   * Cria uma nova loja no sistema
-   */
-  const handleCriarLoja = async (dadosLoja) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const { error } = await supabase
-        .from('lojas')
-        .insert([{
-          id_loja: dadosLoja.id_loja,
-          loja_nome: dadosLoja.loja_nome,
-          loja_endereco: dadosLoja.loja_endereco,
-          loja_telefone: dadosLoja.loja_telefone,
-          loja_perimetro_entrega: dadosLoja.loja_perimetro_entrega,
-          cnpj: dadosLoja.cnpj,
-          ativa: true
-        }]);
-      
-      if (error) throw error;
-      
-      setSuccess('Loja criada com sucesso!');
-      await loadLojas();
-    } catch (err) {
-      setError('Erro ao criar loja: ' + err.message);
-    } finally {
-      setLoading(false);
+    // Extrair apenas os UIDs
+    const uidsAssociados = usuariosAssociados?.map(ua => ua.uid_usuario) || [];
+
+    // Buscar usuários NÃO presentes na lista de associados
+    let query = supabase
+      .from('usuarios')
+      .select('*');
+
+    // Aplicar filtro apenas se houver usuários associados
+    if (uidsAssociados.length > 0) {
+      query = query.not('uid', 'in', `(${uidsAssociados.map(uid => `"${uid}"`).join(',')})`);
     }
-  };
 
-  /**
-   * Associa um usuário como gerente de uma loja
-   */
-  const handleAssociarGerente = async (usuarioId, lojaId) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Buscar dados do usuário e loja em paralelo
-      const [{ data: usuario }, { data: loja }] = await Promise.all([
-        supabase.from('usuarios').select('*').eq('uid', usuarioId).single(),
-        supabase.from('lojas').select('*').eq('id_loja', lojaId).single()
-      ]);
-      
-      if (!usuario || !loja) throw new Error('Usuário ou loja não encontrados');
-      
-      // Criar associação
-      const { error } = await supabase
-        .from('loja_associada')
-        .insert([{
-          uid_usuario: usuarioId,
-          nome_completo: usuario.nome_completo,
-          id_loja: lojaId,
-          loja_nome: loja.loja_nome,
-          loja_endereco: loja.loja_endereco,
-          loja_telefone: loja.loja_telefone,
-          funcao: 'gerente',
-          status_vinculacao: 'ativo',
-          ultimo_status_vinculacao: new Date().toISOString()
-        }]);
-      
-      if (error) throw error;
-      
-      setSuccess('Gerente associado com sucesso!');
-      await loadAssociacoes();
-      await loadUsuariosPendentes();
-    } catch (err) {
-      setError('Erro ao associar gerente: ' + err.message);
-    } finally {
-      setLoading(false);
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error('Erro ao buscar usuários pendentes: ' + error.message);
     }
-  };
 
+    setUsuariosPendentes(data || []);
+
+  } catch (err) {
+    setError('Erro ao carregar usuários: ' + err.message);
+    console.error('Erro detalhado:', err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// ============================================================================
+// ✅ CORREÇÃO: FUNÇÃO loadAssociacoes ADICIONADA
+// ============================================================================
+/**
+ * Carrega associações ativas entre usuários e lojas
+ */
+const loadAssociacoes = async () => {
+  try {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('loja_associada')
+      .select(`
+        *,
+        usuarios:uid_usuario(nome_completo, email),
+        lojas:id_loja(loja_nome)
+      `)
+      .order('ultimo_status_vinculacao', { ascending: false });
+    
+    if (error) throw error;
+    setAssociacoes(data || []);
+  } catch (err) {
+    setError('Erro ao carregar associações: ' + err.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// ============================================================================
+// 4. FUNÇÕES: AÇÕES DO ADMIN
+// ============================================================================
+/**
+ * Cria uma nova loja no sistema
+ */
+const handleCriarLoja = async (dadosLoja) => {
+  try {
+    setLoading(true);
+    setError(null);
+    
+    const { error } = await supabase
+      .from('lojas')
+      .insert([{
+        id_loja: dadosLoja.id_loja,
+        loja_nome: dadosLoja.loja_nome,
+        loja_endereco: dadosLoja.loja_endereco,
+        loja_telefone: dadosLoja.loja_telefone,
+        loja_perimetro_entrega: dadosLoja.loja_perimetro_entrega,
+        cnpj: dadosLoja.cnpj,
+        ativa: true
+      }]);
+    
+    if (error) throw error;
+    
+    setSuccess('Loja criada com sucesso!');
+    await loadLojas();
+  } catch (err) {
+    setError('Erro ao criar loja: ' + err.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+/**
+ * Associa um usuário como gerente de uma loja
+ */
+const handleAssociarGerente = async (usuarioId, lojaId) => {
+  try {
+    setLoading(true);
+    setError(null);
+    
+    // Buscar dados do usuário e loja em paralelo
+    const [{ data: usuario }, { data: loja }] = await Promise.all([
+      supabase.from('usuarios').select('*').eq('uid', usuarioId).single(),
+      supabase.from('lojas').select('*').eq('id_loja', lojaId).single()
+    ]);
+    
+    if (!usuario || !loja) throw new Error('Usuário ou loja não encontrados');
+    
+    // Criar associação
+    const { error } = await supabase
+      .from('loja_associada')
+      .insert([{
+        uid_usuario: usuarioId,
+        nome_completo: usuario.nome_completo,
+        id_loja: lojaId,
+        loja_nome: loja.loja_nome,
+        loja_endereco: loja.loja_endereco,
+        loja_telefone: loja.loja_telefone,
+        funcao: 'gerente',
+        status_vinculacao: 'ativo',
+        ultimo_status_vinculacao: new Date().toISOString()
+      }]);
+    
+    if (error) throw error;
+    
+    setSuccess('Gerente associado com sucesso!');
+    await loadAssociacoes(); // ✅ Agora esta função existe
+    await loadUsuariosPendentes();
+  } catch (err) {
+    setError('Erro ao associar gerente: ' + err.message);
+  } finally {
+    setLoading(false);
+  }
+};
   // ============================================================================
   // 5. VERIFICAÇÕES DE ACESSO E LOADING
   // ============================================================================

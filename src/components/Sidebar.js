@@ -25,13 +25,14 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
    * Itens base do menu - visíveis para todos os usuários logados
    * Inclui páginas básicas de pedidos
    */
-const baseItems = [
-  { path: '/pedidos-pendentes', icon: '📋', label: 'Pedidos Pendentes' },
-  { path: '/pedidos-aceitos', icon: '✅', label: 'Pedidos Aceitos' },
-  { path: '/pedidos-entregues', icon: '🚚', label: 'Pedidos Entregues' },
-  { path: '/gestao-entregadores', icon: '👥', label: 'Gestão de Entregadores' }, // ✅ NOVO ITEM
-  { path: '/perfil', icon: '👤', label: 'Meu Perfil' }, // ✅ NOVO ITEM
-];
+  const baseItems = [
+    { path: '/', icon: '🏠', label: 'Home' }, // ✅ NOVO ITEM HOME
+    { path: '/pedidos-pendentes', icon: '📋', label: 'Pedidos Pendentes' },
+    { path: '/pedidos-aceitos', icon: '✅', label: 'Pedidos Aceitos' },
+    { path: '/pedidos-entregues', icon: '🚚', label: 'Pedidos Entregues' },
+    { path: '/gestao-entregadores', icon: '👥', label: 'Gestão de Entregadores' },
+    { path: '/perfil', icon: '👤', label: 'Meu Perfil' },
+  ];
 
   /**
    * Itens administrativos - visíveis apenas para gerentes e administradores
@@ -39,6 +40,7 @@ const baseItems = [
    */
   const adminItems = [
     { path: '/todos-pedidos', icon: '📊', label: 'Todos os Pedidos' },
+    { path: '/relatorios', icon: '📈', label: 'Relatórios' }, // ✅ NOVO ITEM RELATÓRIOS
     { path: '/admin', icon: '⚙️', label: 'Administração' },
   ];
 
@@ -62,7 +64,7 @@ const baseItems = [
    */
   const handleLogout = async () => {
     try {
-      // Fechar sidebar no mobile antes do logout
+      // Fechar sidebar no mobile antes delogout
       if (window.innerWidth < 1024) {
         toggleSidebar();
       }
@@ -152,6 +154,8 @@ const baseItems = [
          * Lista de itens de navegação
          * Scrollável caso tenha muitos itens
          * Estilos condicionais para item ativo
+         * ✅ HOME adicionado como primeiro item
+         * ✅ RELATÓRIOS adicionado para admin/gerentes
          */}
         <nav className="flex-1 p-4 overflow-y-auto">
           {menuItems.map((item) => (
@@ -160,7 +164,7 @@ const baseItems = [
               href={item.path}
               className={`flex items-center py-3 px-4 rounded-lg mb-2 transition-colors
                 ${router.pathname === item.path
-                  ? 'bg-purple-900 text-white' // Item ativo
+                  ? 'bg-purple-900 text-white shadow-md' // Item ativo
                   : 'hover:bg-purple-700 text-purple-200' // Item normal/hover
                 }`}
               onClick={handleMenuItemClick}
