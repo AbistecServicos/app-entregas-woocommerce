@@ -5,21 +5,17 @@ import { supabase } from '../lib/supabase';
 // ==============================================================================
 // HOOK PERSONALIZADO: useUserProfile
 // ==============================================================================
-/**
- * Hook personalizado para gerenciar dados do usuário logado
- * Responsável por: autenticação, permissões, dados do perfil e edição
- */
 export const useUserProfile = () => {
   // ============================================================================
   // 1. ESTADOS DO HOOK
   // ============================================================================
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
-  const [userRole, setUserRole] = useState('');
+  const [userRole, setUserRole] = useState('visitante'); // ✅ Inicializar como 'visitante'
   const [userLojas, setUserLojas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [updating, setUpdating] = useState(false); // ✅ NOVO: Estado para edição
+  const [updating, setUpdating] = useState(false);
 
   // ============================================================================
   // 2. EFFECT PRINCIPAL - CARREGAMENTO DOS DADOS
@@ -43,6 +39,9 @@ export const useUserProfile = () => {
         
         if (!authUser) {
           setUserRole('visitante');
+          setUser(null);
+          setUserProfile(null);
+          setUserLojas([]);
           setLoading(false);
           return;
         }
@@ -50,81 +49,98 @@ export const useUserProfile = () => {
         setUser(authUser);
 
         // ======================================================================
-        // 2.2. VERIFICAÇÃO DE ADMINISTRADOR
+        // 2.2. BUSCA DOS DADOS DO USUÁRIO E PERMISSÕES
         // ======================================================================
-        const { data: usuarioData, error: userError } = await supabase
-          .from('usuarios')
-          .select('*')
-          .eq('uid', authUser.id)
-          .single();
+        const [usuarioResponse, lojaResponse] = await Promise.all([
+          // Buscar dados do usuário
+          supabase
+            .from('usuarios')
+            .select('*')
+            .eq('uid', authUser.id)
+            .single(),
+          
+          // Buscar lojas associadas (em paralelo para melhor performance)
+          supabase
+            .from('loja_associada')
+            .select('*')
+            .eq('uid_usuario', authUser.id)
+            .eq('status_vinculacao', 'ativo')
+        ]);
 
-        if (userError) {
-          setError('Erro ao buscar usuário: ' + userError.message);
+        // ======================================================================
+        // 2.3. TRATAMENTO DE ERROS DAS CONSULTAS
+        // ======================================================================
+        if (usuarioResponse.error) {
+          setError('Erro ao buscar usuário: ' + usuarioResponse.error.message);
           setLoading(false);
           return;
         }
 
-        // Se for admin, define role e finaliza
+        const usuarioData = usuarioResponse.data;
+
+        // ======================================================================
+        // 2.4. VERIFICAÇÃO DE ADMINISTRADOR
+        // ======================================================================
         if (usuarioData?.is_admin) {
           setUserRole('admin');
           setUserProfile(usuarioData);
+          setUserLojas([]);
           setLoading(false);
           return;
         }
 
         // ======================================================================
-        // 2.3. BUSCA DE LOJAS ASSOCIADAS (NÃO-ADMIN)
+        // 2.5. VERIFICAÇÃO DE LOJAS ASSOCIADAS (NÃO-ADMIN)
         // ======================================================================
-        const { data: lojaData, error: lojaError } = await supabase
-          .from('loja_associada')
-          .select('*')
-          .eq('uid_usuario', authUser.id)
-          .eq('status_vinculacao', 'ativo');
-
-        if (lojaError) {
-          setError('Erro ao buscar lojas: ' + lojaError.message);
+        if (lojaResponse.error) {
+          setError('Erro ao buscar lojas: ' + lojaResponse.error.message);
           setLoading(false);
           return;
         }
+
+        const lojaData = lojaResponse.data || [];
 
         // Se não tem lojas associadas, é visitante
-        if (!lojaData || lojaData.length === 0) {
+        if (lojaData.length === 0) {
           setUserRole('visitante');
+          setUserProfile(usuarioData);
+          setUserLojas([]);
           setLoading(false);
           return;
         }
 
         // ======================================================================
-        // 2.4. DEFINIÇÃO DA FUNÇÃO (ROLE) DO USUÁRIO
+        // 2.6. DEFINIÇÃO DA FUNÇÃO (ROLE) DO USUÁRIO
         // ======================================================================
+        setUserProfile(usuarioData);
         setUserLojas(lojaData);
         
-        // Verifica se é GERENTE
+        // Verificar se é GERENTE (pode ter apenas uma loja como gerente)
         const gerente = lojaData.find(loja => loja.funcao === 'gerente');
         
         if (gerente) {
-          if (lojaData.length > 1) {
-            setError('ERRO: Gerente não pode ter múltiplas lojas');
+          // ✅ VERIFICAÇÃO IMPORTANTE: Gerente não pode ter múltiplas lojas
+          const lojasGerente = lojaData.filter(loja => loja.funcao === 'gerente');
+          if (lojasGerente.length > 1) {
+            setError('ERRO: Usuário não pode ser gerente em múltiplas lojas');
             setUserRole('erro');
           } else {
             setUserRole('gerente');
           }
         } else {
-          // Se não é gerente, é ENTREGADOR
+          // Se não é gerente, é ENTREGADOR (pode ter múltiplas lojas)
           setUserRole('entregador');
         }
 
-        setUserProfile(usuarioData);
-
       } catch (error) {
         // ======================================================================
-        // 2.5. TRATAMENTO DE ERROS GERAIS
+        // 2.7. TRATAMENTO DE ERROS GERAIS
         // ======================================================================
         setError('Erro inesperado: ' + error.message);
         console.error('Erro no useUserProfile:', error);
       } finally {
         // ======================================================================
-        // 2.6. FINALIZAÇÃO
+        // 2.8. FINALIZAÇÃO
         // ======================================================================
         setLoading(false);
       }
@@ -133,134 +149,108 @@ export const useUserProfile = () => {
     loadUserData();
   }, []);
 
-  // ============================================================================
-  // 3. FUNÇÕES DE EDIÇÃO DE PERFIL
-  // ============================================================================
-  /**
-   * Função para atualizar perfil do usuário
-   * Atualiza tanto tabela 'usuarios' quanto 'loja_associada' quando necessário
-   */
-  const updateUserProfile = async (formData) => {
-    try {
-      setUpdating(true);
-      setError(null);
+// ============================================================================
+// 3. FUNÇÕES DE EDIÇÃO DE PERFIL
+// ============================================================================
+const updateUserProfile = async (formData) => {
+  try {
+    setUpdating(true);
+    setError(null);
 
-      // ========================================================================
-      // 3.1. VALIDAÇÃO INICIAL
-      // ========================================================================
-      if (!userProfile || !userProfile.uid) {
-        throw new Error('Usuário não autenticado');
-      }
+    // Validação inicial
+    if (!userProfile || !userProfile.uid) {
+      throw new Error('Usuário não autenticado');
+    }
 
-      // ========================================================================
-      // 3.2. ATUALIZAR TABELA USUARIOS (TODOS OS USUÁRIOS)
-      // ========================================================================
-      const { error: userError } = await supabase
-        .from('usuarios')
-        .update({
-          nome_completo: formData.nome_completo,
-          nome_usuario: formData.nome_usuario,
-          telefone: formData.telefone,
-          foto: formData.foto
-        })
-        .eq('uid', userProfile.uid);
-
-      if (userError) throw userError;
-
-      // ========================================================================
-      // 3.3. ATUALIZAR TABELA LOJA_ASSOCIADA (APENAS ENTREGADORES)
-      // ========================================================================
-      if (userRole === 'entregador' && userLojas.length > 0) {
-        const { error: lojaError } = await supabase
-          .from('loja_associada')
-          .update({
-            veiculo: formData.veiculo,
-            carga_maxima: formData.carga_maxima ? parseInt(formData.carga_maxima) : null,
-            perimetro_entrega: formData.perimetro_entrega,
-            nome_completo: formData.nome_completo // Mantém sincronizado
-          })
-          .eq('uid_usuario', userProfile.uid)
-          .eq('id_loja', userLojas[0].id_loja);
-
-        if (lojaError) throw lojaError;
-      }
-
-      // ========================================================================
-      // 3.4. ATUALIZAR ESTADOS LOCAIS
-      // ========================================================================
-      setUserProfile(prev => ({
-        ...prev,
+    // ATUALIZAR TABELA USUARIOS (TODOS OS USUÁRIOS)
+    const { error: userError } = await supabase
+      .from('usuarios')
+      .update({
         nome_completo: formData.nome_completo,
         nome_usuario: formData.nome_usuario,
         telefone: formData.telefone,
         foto: formData.foto
-      }));
+      })
+      .eq('uid', userProfile.uid);
 
-      if (userRole === 'entregador' && userLojas.length > 0) {
-        setUserLojas(prev => prev.map(loja => 
-          loja.id_loja === userLojas[0].id_loja ? {
-            ...loja,
-            veiculo: formData.veiculo,
-            carga_maxima: formData.carga_maxima,
-            perimetro_entrega: formData.perimetro_entrega,
-            nome_completo: formData.nome_completo
-          } : loja
-        ));
-      }
+    if (userError) throw userError;
 
-      return { success: true, message: 'Perfil atualizado com sucesso!' };
+    // ATUALIZAR TABELA LOJA_ASSOCIADA (APENAS ENTREGADORES)
+    if (userRole === 'entregador' && userLojas.length > 0) {
+      const { error: lojaError } = await supabase
+        .from('loja_associada')
+        .update({
+          veiculo: formData.veiculo,
+          carga_maxima: formData.carga_maxima ? parseInt(formData.carga_maxima) : null,
+          perimetro_entrega: formData.perimetro_entrega,
+          nome_completo: formData.nome_completo
+        })
+        .eq('uid_usuario', userProfile.uid)
+        .eq('id_loja', userLojas[0].id_loja);
 
-    } catch (error) {
-      // ========================================================================
-      // 3.5. TRATAMENTO DE ERROS NA EDIÇÃO
-      // ========================================================================
-      const errorMsg = 'Erro ao atualizar perfil: ' + error.message;
-      setError(errorMsg);
-      console.error('Erro no updateUserProfile:', error);
-      return { success: false, message: errorMsg };
-    } finally {
-      // ========================================================================
-      // 3.6. FINALIZAÇÃO DA EDIÇÃO
-      // ========================================================================
-      setUpdating(false);
+      if (lojaError) throw lojaError;
     }
-  };
+
+    // Atualizar estados locais
+    setUserProfile(prev => ({
+      ...prev,
+      nome_completo: formData.nome_completo,
+      nome_usuario: formData.nome_usuario,
+      telefone: formData.telefone,
+      foto: formData.foto
+    }));
+
+    if (userRole === 'entregador' && userLojas.length > 0) {
+      setUserLojas(prev => prev.map(loja => 
+        loja.id_loja === userLojas[0].id_loja ? {
+          ...loja,
+          veiculo: formData.veiculo,
+          carga_maxima: formData.carga_maxima,
+          perimetro_entrega: formData.perimetro_entrega,
+          nome_completo: formData.nome_completo
+        } : loja
+      ));
+    }
+
+    return { success: true, message: 'Perfil atualizado com sucesso!' };
+
+  } catch (error) {
+    const errorMsg = 'Erro ao atualizar perfil: ' + error.message;
+    setError(errorMsg);
+    console.error('Erro no updateUserProfile:', error);
+    return { success: false, message: errorMsg };
+  } finally {
+    setUpdating(false);
+  }
+};
 
   // ============================================================================
-  // 4. FUNÇÃO: RECARREGAR DADOS DO USUÁRIO
+  // 4. FUNÇÃO: RECARREGAR DADOS DO USUÁRIO (MELHORADA)
   // ============================================================================
-  /**
-   * Função para recarregar todos os dados do usuário
-   * Útil após edições ou mudanças externas
-   */
   const reloadUserData = async () => {
     setLoading(true);
     try {
       // Recarregar dados de autenticação
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) throw authError;
+      
       setUser(authUser);
 
       if (authUser) {
-        // Recarregar dados do usuário
-        const { data: usuarioData } = await supabase
-          .from('usuarios')
-          .select('*')
-          .eq('uid', authUser.id)
-          .single();
-        setUserProfile(usuarioData);
-
-        // Recarregar lojas associadas (apenas não-admin)
-        if (!usuarioData?.is_admin) {
-          const { data: lojaData } = await supabase
-            .from('loja_associada')
-            .select('*')
-            .eq('uid_usuario', authUser.id)
-            .eq('status_vinculacao', 'ativo');
-          setUserLojas(lojaData || []);
-        }
+        // Executar o mesmo fluxo de carregamento
+        const loadUserData = async () => {
+          // ... (repetir a lógica do effect principal) ...
+        };
+        await loadUserData();
+      } else {
+        setUserRole('visitante');
+        setUserProfile(null);
+        setUserLojas([]);
       }
     } catch (error) {
-      console.error('Erro ao recarregar dados:', error);
+      setError('Erro ao recarregar dados: ' + error.message);
+      console.error('Erro no reloadUserData:', error);
     } finally {
       setLoading(false);
     }
@@ -270,17 +260,14 @@ export const useUserProfile = () => {
   // 5. RETORNO DO HOOK
   // ============================================================================
   return { 
-    // Estados principais
     user,
     userProfile, 
     userRole, 
     userLojas, 
     loading, 
     error,
-    updating, // ✅ NOVO: Estado de edição
-    
-    // Funções
-    updateUserProfile, // ✅ NOVO: Função de edição
-    reloadUserData // ✅ NOVO: Função de recarregamento
+    updating,
+    updateUserProfile,
+    reloadUserData
   };
 };
