@@ -1,0 +1,1202 @@
+===== DeliveryStatus.js =====
+ 
+
+
+===== EditLojaModal.js =====
+// components/EditLojaModal.js
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+
+export default function EditLojaModal({ isOpen, onClose, loja }) {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    veiculo: '',
+    carga_maxima: '',
+    perimetro_entrega: ''
+  });
+
+  useEffect(() => {
+    if (isOpen && loja) {
+      setFormData({
+        veiculo: loja.veiculo || '',
+        carga_maxima: loja.carga_maxima || '',
+        perimetro_entrega: loja.perimetro_entrega || ''
+      });
+    }
+  }, [isOpen, loja]);
+
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+      
+      const { error } = await supabase
+        .from('loja_associada')
+        .update({
+          veiculo: formData.veiculo,
+          carga_maxima: formData.carga_maxima ? parseInt(formData.carga_maxima) : null,
+          perimetro_entrega: formData.perimetro_entrega
+        })
+        .eq('id', loja.id);
+
+      if (error) throw error;
+
+      alert('Dados da loja atualizados com sucesso!');
+      onClose();
+      window.location.reload();
+    } catch (error) {
+      console.error('Erro ao atualizar:', error);
+      alert('Erro ao atualizar dados da loja');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg w-96 max-w-95vw">
+        <h2 className="text-xl font-bold text-gray-800 mb-4">🏪 Editar Loja: {loja.loja_nome}</h2>
+        
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Veículo</label>
+            <select
+              value={formData.veiculo}
+              onChange={(e) => setFormData({...formData, veiculo: e.target.value})}
+              className="w-full p-2 border border-gray-300 rounded text-gray-800"
+            >
+              <option value="">Selecione o veículo</option>
+              <option value="carro">Carro</option>
+              <option value="moto">Moto</option>
+              <option value="bicicleta">Bicicleta</option>
+              <option value="caminhao">Caminhão</option>
+              <option value="van">Van</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Carga Máxima (kg)</label>
+            <input
+              type="number"
+              value={formData.carga_maxima}
+              onChange={(e) => setFormData({...formData, carga_maxima: e.target.value})}
+              className="w-full p-2 border border-gray-300 rounded text-gray-800"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Perímetro de Entrega</label>
+            <input
+              type="text"
+              value={formData.perimetro_entrega}
+              onChange={(e) => setFormData({...formData, perimetro_entrega: e.target.value})}
+              className="w-full p-2 border border-gray-300 rounded text-gray-800"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-2 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 bg-gray-300 text-gray-700 py-2 rounded"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={loading}
+            className="flex-1 bg-blue-600 text-white py-2 rounded disabled:opacity-50"
+          >
+            {loading ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+===== EditProfileModal.js =====
+// components/EditProfileModal.js
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+
+// ==============================================================================
+// MODAL DE EDIÇÃO DE PERFIL
+// ==============================================================================
+export default function EditProfileModal({ isOpen, onClose, userProfile, userRole, userLojas }) {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    nome_completo: '',
+    nome_usuario: '',
+    telefone: '',
+    foto: '',
+    veiculo: '',
+    carga_maxima: '',
+    perimetro_entrega: ''
+  });
+
+  // ============================================================================
+  // 1. CARREGAR DADOS ATUAIS AO ABRIR MODAL
+  // ============================================================================
+  useEffect(() => {
+    if (isOpen && userProfile) {
+      setFormData({
+        nome_completo: userProfile.nome_completo || '',
+        nome_usuario: userProfile.nome_usuario || '',
+        telefone: userProfile.telefone || '',
+        foto: userProfile.foto || '',
+        veiculo: userLojas[0]?.veiculo || '',
+        carga_maxima: userLojas[0]?.carga_maxima || '',
+        perimetro_entrega: userLojas[0]?.perimetro_entrega || ''
+      });
+    }
+  }, [isOpen, userProfile, userLojas]);
+
+  // ============================================================================
+  // 2. FUNÇÃO: SALVAR ALTERAÇÕES
+  // ============================================================================
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+
+      const { error: userError } = await supabase
+        .from('usuarios')
+        .update({
+          nome_completo: formData.nome_completo,
+          nome_usuario: formData.nome_usuario,
+          telefone: formData.telefone,
+          foto: formData.foto
+        })
+        .eq('uid', userProfile.uid);
+
+      if (userError) throw userError;
+
+      if (userRole === 'entregador' && userLojas.length > 0) {
+        const { error: lojaError } = await supabase
+          .from('loja_associada')
+          .update({
+            veiculo: formData.veiculo,
+            carga_maxima: formData.carga_maxima ? parseInt(formData.carga_maxima) : null,
+            perimetro_entrega: formData.perimetro_entrega,
+            nome_completo: formData.nome_completo
+          })
+          .eq('uid_usuario', userProfile.uid)
+          .eq('id_loja', userLojas[0].id_loja);
+
+        if (lojaError) throw lojaError;
+      }
+
+      alert('Perfil atualizado com sucesso!');
+      onClose();
+      window.location.reload();
+
+    } catch (error) {
+      console.error('Erro ao atualizar perfil:', error);
+      alert('Erro ao atualizar perfil');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg w-96 max-w-95vw max-h-95vh overflow-y-auto">
+        
+        {/* CABEÇALHO */}
+        <h2 className="text-xl font-bold mb-4 text-gray-800">✏️ Editar Perfil</h2>
+        
+        {/* CAMPOS DO FORMULÁRIO */}
+        <div className="space-y-4">
+          {/* NOME COMPLETO */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nome Completo
+            </label>
+            <input
+              type="text"
+              value={formData.nome_completo}
+              onChange={(e) => setFormData({...formData, nome_completo: e.target.value})}
+              className="w-full p-2 border border-gray-300 rounded text-gray-800 bg-white"
+              placeholder="Seu nome completo"
+            />
+          </div>
+
+          {/* NOME DE USUÁRIO */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nome de Usuário
+            </label>
+            <input
+              type="text"
+              value={formData.nome_usuario}
+              onChange={(e) => setFormData({...formData, nome_usuario: e.target.value})}
+              className="w-full p-2 border border-gray-300 rounded text-gray-800 bg-white"
+              placeholder="Seu nome de usuário"
+            />
+          </div>
+
+          {/* TELEFONE */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Telefone
+            </label>
+            <input
+              type="tel"
+              value={formData.telefone}
+              onChange={(e) => setFormData({...formData, telefone: e.target.value})}
+              className="w-full p-2 border border-gray-300 rounded text-gray-800 bg-white"
+              placeholder="(11) 99999-9999"
+            />
+          </div>
+
+          {/* FOTO */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              URL da Foto
+            </label>
+            <input
+              type="url"
+              value={formData.foto}
+              onChange={(e) => setFormData({...formData, foto: e.target.value})}
+              className="w-full p-2 border border-gray-300 rounded text-gray-800 bg-white"
+              placeholder="https://exemplo.com/foto.jpg"
+            />
+          </div>
+
+          {/* CAMPOS ESPECÍFICOS PARA ENTREGADORES */}
+          {userRole === 'entregador' && (
+            <>
+              {/* VEÍCULO */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Veículo
+                </label>
+                <select
+                  value={formData.veiculo}
+                  onChange={(e) => setFormData({...formData, veiculo: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded text-gray-800 bg-white"
+                >
+                  <option value="">Selecione o veículo</option>
+                  <option value="carro">Carro</option>
+                  <option value="moto">Moto</option>
+                  <option value="bicicleta">Bicicleta</option>
+                  <option value="caminhao">Caminhão</option>
+                  <option value="van">Van</option>
+                </select>
+              </div>
+
+              {/* CARGA MÁXIMA */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Carga Máxima (kg)
+                </label>
+                <input
+                  type="number"
+                  value={formData.carga_maxima}
+                  onChange={(e) => setFormData({...formData, carga_maxima: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded text-gray-800 bg-white"
+                  placeholder="Ex: 50"
+                />
+              </div>
+
+              {/* PERÍMETRO DE ENTREGA */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Perímetro de Entrega
+                </label>
+                <input
+                  type="text"
+                  value={formData.perimetro_entrega}
+                  onChange={(e) => setFormData({...formData, perimetro_entrega: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded text-gray-800 bg-white"
+                  placeholder="Ex: Zona Norte, até 10km"
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* BOTÕES DE AÇÃO */}
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded font-medium hover:bg-gray-400 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={loading}
+            className="flex-1 bg-purple-600 text-white py-2 px-4 rounded font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+===== EditUsuarioModal.js =====
+// components/EditUsuarioModal.js
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+
+export default function EditUsuarioModal({ isOpen, onClose, userProfile }) {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    nome_completo: '',
+    nome_usuario: '',
+    telefone: '',
+    foto: ''
+  });
+
+  useEffect(() => {
+    if (isOpen && userProfile) {
+      setFormData({
+        nome_completo: userProfile.nome_completo || '',
+        nome_usuario: userProfile.nome_usuario || '',
+        telefone: userProfile.telefone || '',
+        foto: userProfile.foto || ''
+      });
+    }
+  }, [isOpen, userProfile]);
+
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+      
+      const { error } = await supabase
+        .from('usuarios')
+        .update({
+          nome_completo: formData.nome_completo,
+          nome_usuario: formData.nome_usuario,
+          telefone: formData.telefone,
+          foto: formData.foto
+        })
+        .eq('uid', userProfile.uid);
+
+      if (error) throw error;
+
+      alert('Dados pessoais atualizados com sucesso!');
+      onClose();
+      window.location.reload();
+    } catch (error) {
+      console.error('Erro ao atualizar:', error);
+      alert('Erro ao atualizar dados');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg w-96 max-w-95vw">
+        <h2 className="text-xl font-bold text-gray-800 mb-4">✏️ Editar Dados Pessoais</h2>
+        
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Nome Completo</label>
+            <input
+              type="text"
+              value={formData.nome_completo}
+              onChange={(e) => setFormData({...formData, nome_completo: e.target.value})}
+              className="w-full p-2 border border-gray-300 rounded text-gray-800"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Nome de Usuário</label>
+            <input
+              type="text"
+              value={formData.nome_usuario}
+              onChange={(e) => setFormData({...formData, nome_usuario: e.target.value})}
+              className="w-full p-2 border border-gray-300 rounded text-gray-800"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Telefone</label>
+            <input
+              type="tel"
+              value={formData.telefone}
+              onChange={(e) => setFormData({...formData, telefone: e.target.value})}
+              className="w-full p-2 border border-gray-300 rounded text-gray-800"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">URL da Foto</label>
+            <input
+              type="url"
+              value={formData.foto}
+              onChange={(e) => setFormData({...formData, foto: e.target.value})}
+              className="w-full p-2 border border-gray-300 rounded text-gray-800"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-2 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 bg-gray-300 text-gray-700 py-2 rounded"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={loading}
+            className="flex-1 bg-purple-600 text-white py-2 rounded disabled:opacity-50"
+          >
+            {loading ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+===== Header.js =====
+// components/Header.js
+export default function Header({ toggleSidebar, showMenuButton = true, title }) {
+  return (
+    <header className="bg-white shadow-sm border-b border-gray-200">
+      <div className="flex items-center justify-between px-4 py-3">
+        
+        {/* ================================================================== */}
+        {/* BOTÃO HAMBURGUER (CONDICIONAL) */}
+        {/* ================================================================== */}
+        <div className="flex items-center">
+          {showMenuButton && (
+            <button
+              onClick={toggleSidebar}
+              className="lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              aria-label="Abrir menu"
+            >
+              {/* Ícone do hamburger */}
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          )}
+          
+          {/* Espaço para alinhamento quando não há botão */}
+          {!showMenuButton && <div className="w-10 h-10"></div>}
+        </div>
+
+        {/* ================================================================== */}
+        {/* TÍTULO (CUSTOMIZÁVEL PARA PÁGINAS SEM SIDEBAR) */}
+        {/* ================================================================== */}
+        <div className="flex-1 text-center lg:text-left">
+          <h1 className="text-xl font-semibold text-gray-900">
+            {title || 'EntregasWoo'} {/* Usa título customizado ou padrão */}
+          </h1>
+        </div>
+
+        {/* ================================================================== */}
+        {/* ESPAÇO PARA ELEMENTOS À DIREITA (BOTÃO DE PERFIL, ETC) */}
+        {/* ================================================================== */}
+        <div className="w-10 h-10"></div>
+      </div>
+    </header>
+  );
+}
+
+
+===== Layout.js =====
+// components/Layout.js
+import { useState, useEffect } from 'react';
+import Header from './Header';
+import Sidebar from './Sidebar';
+
+// ==============================================================================
+// COMPONENTE LAYOUT PRINCIPAL
+// ==============================================================================
+/**
+ * Layout é o componente que define a estrutura básica de todas as páginas
+ * Ele gerencia: Sidebar, Header e Conteúdo principal
+ * 
+ * @param {Object} props - Propriedades do componente
+ * @param {ReactNode} props.children - Conteúdo da página
+ * @param {boolean} [props.hideSidebar=false] - Oculta a sidebar (para páginas como Admin)
+ */
+const Layout = ({ children, hideSidebar = false }) => {
+  // ============================================================================
+  // 1. ESTADOS DO COMPONENTE
+  // ============================================================================
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // ============================================================================
+  // 2. EFFECT: DETECTAR TAMANHO DA TELA
+  // ============================================================================
+  useEffect(() => {
+    const checkIsMobile = () => setIsMobile(window.innerWidth < 1024);
+    
+    // Verificar inicialmente
+    checkIsMobile();
+    
+    // Adicionar listener para redimensionamento
+    window.addEventListener('resize', checkIsMobile);
+    
+    // Cleanup
+    return () => window.removeEventListener('resize', checkIsMobile);
+  }, []);
+
+  // ============================================================================
+  // 3. FUNÇÕES: CONTROLE DA SIDEBAR
+  // ============================================================================
+  /**
+   * Alterna o estado da sidebar (aberto/fechado)
+   */
+  const toggleSidebar = () => {
+    setSidebarOpen(prev => !prev);
+  };
+
+  /**
+   * Fecha a sidebar (útil para links mobile)
+   */
+  const closeSidebar = () => {
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  };
+
+  // ============================================================================
+  // 4. RENDERIZAÇÃO DO LAYOUT
+  // ============================================================================
+  return (
+    <div className="flex h-screen bg-gray-50">
+      
+      {/* ====================================================================== */}
+      {/* SIDEBAR - MENU LATERAL (CONDICIONAL) */}
+      {/* ====================================================================== */}
+      {/**
+       * A sidebar é opcional (pode ser ocultada com hideSidebar=true)
+       * Mas o Header SEMPRE deve aparecer, mesmo sem sidebar
+       */}
+      {!hideSidebar && (
+        <Sidebar 
+          isOpen={sidebarOpen} 
+          toggleSidebar={toggleSidebar}
+          onItemClick={closeSidebar}
+        />
+      )}
+      
+      {/* ====================================================================== */}
+      {/* CONTEÚDO PRINCIPAL */}
+      {/* ====================================================================== */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        
+        {/* ================================================================== */}
+        {/* HEADER - CABEÇALHO (SEMPRE VISÍVEL, INDEPENDENTE DA SIDEBAR) */}
+        {/* ================================================================== */}
+        {/**
+         * ✅ CORREÇÃO: Header SEMPRE visível, mas o botão hamburger é condicional
+         * showMenuButton=false quando hideSidebar=true
+         */}
+        <Header 
+          toggleSidebar={toggleSidebar} 
+          showMenuButton={!hideSidebar} // Botão só aparece se sidebar existir
+          title={hideSidebar ? "Painel Administrativo" : undefined} // Título customizado para Admin
+        />
+        
+        {/* ================================================================== */}
+        {/* CONTEÚDO DA PÁGINA */}
+        {/* ================================================================== */}
+        <main 
+          className="flex-1 overflow-y-auto p-4 lg:p-6"
+          id="main-content"
+          tabIndex={-1}
+        >
+          {children}
+        </main>
+      </div>
+
+      {/* ====================================================================== */}
+      {/* OVERLAY - SOMENTE MOBILE E QUANDO SIDEBAR NÃO ESTÁ OCULTA */}
+      {/* ====================================================================== */}
+      {!hideSidebar && sidebarOpen && isMobile && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
+          onClick={closeSidebar}
+          aria-hidden="true"
+          role="button"
+          aria-label="Fechar menu"
+        />
+      )}
+    </div>
+  );
+};
+
+export default Layout;
+
+
+===== MobileMenu.js =====
+
+
+===== Notification.js =====
+ 
+
+
+===== OrderCard.js =====
+ 
+
+
+===== Pagination.js =====
+// components/Pagination.js
+// ==============================================================================
+// COMPONENTE PAGINATION (SEM DEPENDÊNCIAS EXTERNAS)
+// ==============================================================================
+export default function Pagination({ currentPage, totalPages, onPageChange }) {
+  // ============================================================================
+  // 1. FUNÇÃO: GERAR BOTÕES DE PÁGINA
+  // ============================================================================
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5; // Máximo de páginas visíveis
+    
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    // Ajustar se estiver no início
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    
+    return pages;
+  };
+
+  // ============================================================================
+  // 2. RENDERIZAÇÃO DO COMPONENTE
+  // ============================================================================
+  if (totalPages <= 1) return null; // Não mostrar paginação se só tiver uma página
+
+  return (
+    <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3 sm:px-6">
+      
+      {/* ✅ PAGINAÇÃO MOBILE */}
+      <div className="flex flex-1 justify-between sm:hidden">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          ← Anterior
+        </button>
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Próxima →
+        </button>
+      </div>
+      
+      {/* ✅ PAGINAÇÃO DESKTOP */}
+      <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+        
+        {/* ✅ CONTADOR DE PÁGINAS */}
+        <div>
+          <p className="text-sm text-gray-700">
+            Página <span className="font-medium">{currentPage}</span> de{' '}
+            <span className="font-medium">{totalPages}</span>
+          </p>
+        </div>
+        
+        {/* ✅ NAVEGAÇÃO */}
+        <div>
+          <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+            
+            {/* ✅ BOTÃO ANTERIOR */}
+            <button
+              onClick={() => onPageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="sr-only">Anterior</span>
+              ← {/* Emoji seta esquerda */}
+            </button>
+            
+            {/* ✅ BOTÕES DE PÁGINA */}
+            {getPageNumbers().map((page) => (
+              <button
+                key={page}
+                onClick={() => onPageChange(page)}
+                className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
+                  currentPage === page
+                    ? 'bg-purple-600 text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-600'
+                    : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+            
+            {/* ✅ BOTÃO PRÓXIMA */}
+            <button
+              onClick={() => onPageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="sr-only">Próxima</span>
+              → {/* Emoji seta direita */}
+            </button>
+          </nav>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+===== RouteGuard.js =====
+// components/RouteGuard.js
+import { useUserProfile } from '../hooks/useUserProfile';
+import { useRouter } from 'next/router';
+import { useEffect } from 'react';
+
+const RouteGuard = ({ children, requiredRole }) => {
+  const { userRole, loading } = useUserProfile();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading) {
+      // Definir hierarquia de permissões
+      const rolesHierarchy = {
+        'visitante': 0,
+        'entregador': 1,
+        'gerente': 2,
+        'admin': 3
+      };
+
+      // Verificar se usuário tem permissão
+      const hasPermission = rolesHierarchy[userRole] >= rolesHierarchy[requiredRole];
+      
+      if (!hasPermission) {
+        // Redirecionar para página não autorizada ou home
+        router.push('/');
+      }
+    }
+  }, [userRole, loading, requiredRole, router]);
+
+  // Mostrar loading enquanto verifica permissões
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  // Verificação final (caso o useEffect não tenha redirecionado ainda)
+  const rolesHierarchy = {
+    'visitante': 0,
+    'entregador': 1,
+    'gerente': 2,
+    'admin': 3
+  };
+  
+  const hasPermission = rolesHierarchy[userRole] >= rolesHierarchy[requiredRole];
+
+  if (!hasPermission) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600">Acesso Não Autorizado</h1>
+          <p className="text-gray-600 mt-2">Você não tem permissão para acessar esta página.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return children;
+};
+
+export default RouteGuard;
+
+
+===== Sidebar.js =====
+// components/Sidebar.js
+import { useState, useEffect } from 'react'; // ✅ Adicionar useEffect
+import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { supabase } from '../lib/supabase';
+import { useUserProfile } from '../hooks/useUserProfile';
+import UserProfile from './UserProfile';
+
+// ==============================================================================
+// COMPONENTE SIDEBAR - MENU LATERAL
+// ==============================================================================
+/**
+ * Sidebar é o menu de navegação lateral do sistema
+ * Contém: Logo, Menu de navegação, Perfil do usuário e Botão de logout
+ * Responsivo: Mobile (overlay) e Desktop (fixo)
+ * ✅ NOVO: Escuta mudanças de autenticação em tempo real
+ */
+const Sidebar = ({ isOpen, toggleSidebar }) => {
+  const router = useRouter();
+  const { user, userRole, loading: loadingUser, reloadUserData } = useUserProfile(); // ✅ Adicionar reloadUserData
+  
+  // ============================================================================
+  // 1. EFFECT: ESCUTAR MUDANÇAS DE AUTENTICAÇÃO (NOVO)
+  // ============================================================================
+  /**
+   * ✅ NOVO: Escuta mudanças no estado de autenticação do Supabase
+   * Atualiza automaticamente quando usuário faz login ou logout
+   * Preserva a integridade do código existente
+   */
+  useEffect(() => {
+    // Inscrever para receber eventos de mudança de autenticação
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        // Recarregar dados do usuário quando houver mudança de autenticação
+        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+          if (reloadUserData) {
+            await reloadUserData();
+          }
+        }
+      }
+    );
+
+    // Cleanup: cancelar a inscrição quando o componente for desmontado
+    return () => {
+      if (authListener && authListener.unsubscribe) {
+        authListener.unsubscribe();
+      }
+    };
+  }, [reloadUserData]); // ✅ Dependência: reloadUserData
+
+  // ============================================================================
+  // 2. ITENS DO MENU COM RESTRIÇÃO DE ACESSO
+  // ============================================================================
+  /**
+   * Itens base do menu - visíveis para todos os usuários logados
+   * Inclui páginas básicas de pedidos
+   */
+  const baseItems = [
+    { path: '/', icon: '🏠', label: 'Home' },
+    { path: '/pedidos-pendentes', icon: '📋', label: 'Pedidos Pendentes' },
+    { path: '/pedidos-aceitos', icon: '✅', label: 'Pedidos Aceitos' },
+    { path: '/pedidos-entregues', icon: '🚚', label: 'Pedidos Entregues' },
+    { path: '/gestao-entregadores', icon: '👥', label: 'Gestão de Entregadores' },
+    { path: '/perfil', icon: '👤', label: 'Meu Perfil' },
+  ];
+
+  /**
+   * Itens administrativos - visíveis apenas para gerentes e administradores
+   * Inclui gestão completa e administração
+   */
+  const adminItems = [
+    { path: '/todos-pedidos', icon: '📊', label: 'Todos os Pedidos' },
+    { path: '/relatorios', icon: '📈', label: 'Relatórios' },
+    { path: '/admin', icon: '⚙️', label: 'Administração' },
+  ];
+
+  /**
+   * Combina itens conforme a role do usuário
+   * Entregadores: apenas itens base
+   * Gerentes/Admin: itens base + itens administrativos
+   */
+  const menuItems = [
+    ...baseItems,
+    ...((userRole === 'admin' || userRole === 'gerente') ? adminItems : [])
+  ];
+
+// ============================================================================
+// 3. FUNÇÃO: LOGOUT DO USUÁRIO (CORRIGIDA)
+// ============================================================================
+/**
+ * ✅ CORREÇÃO: Logout com redirecionamento imediato SEM esperar reloadUserData
+ * O listener de auth state change vai cuidar da atualização da UI
+ */
+const handleLogout = async () => {
+  try {
+    // Fechar sidebar no mobile antes do logout
+    if (window.innerWidth < 1024) {
+      toggleSidebar();
+    }
+    
+    // Realizar logout via Supabase
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    
+    console.log('Logout realizado com sucesso');
+    
+    // ✅ CORREÇÃO: Redirecionar IMEDIATAMENTE para login
+    // O listener onAuthStateChange vai atualizar a UI automaticamente
+    router.push('/login');
+    
+  } catch (error) {
+    console.error('Erro ao fazer logout:', error);
+  }
+};
+
+  // ============================================================================
+  // 4. FUNÇÃO: REDIRECIONAR PARA LOGIN
+  // ============================================================================
+  /**
+   * Redireciona para página de login quando usuário não está autenticado
+   */
+  const handleLoginRedirect = () => {
+    if (window.innerWidth < 1024) {
+      toggleSidebar();
+    }
+    router.push('/login');
+  };
+
+  // ============================================================================
+  // 5. FUNÇÃO: FECHAR SIDEBAR AO CLICAR EM ITEM (MOBILE)
+  // ============================================================================
+  /**
+   * Fecha automaticamente o sidebar no mobile quando um item é clicado
+   * Melhora a experiência mobile evitando overlay permanente
+   */
+  const handleMenuItemClick = () => {
+    if (window.innerWidth < 1024) {
+      toggleSidebar();
+    }
+  };
+
+  // ============================================================================
+  // 6. RENDERIZAÇÃO DO COMPONENTE
+  // ============================================================================
+  return (
+    <>
+      {/* ====================================================================== */}
+      {/* OVERLAY PARA MOBILE */}
+      {/* ====================================================================== */}
+      {/**
+       * Overlay escurece o conteúdo de fundo quando sidebar está aberta no mobile
+       * Ao clicar no overlay, fecha automaticamente o sidebar
+       * Visível apenas em dispositivos mobile (lg:hidden)
+       */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          onClick={toggleSidebar}
+        />
+      )}
+      
+      {/* ====================================================================== */}
+      {/* SIDEBAR PRINCIPAL */}
+      {/* ====================================================================== */}
+      {/**
+       * Container principal do sidebar
+       * Mobile: fixed com transição slide
+       * Desktop: static como parte do layout
+       * Background roxo com texto branco para contraste
+       */}
+      <div className={`
+        fixed lg:static inset-y-0 left-0 z-50
+        w-64 bg-purple-800 text-white
+        transform transition-transform duration-300 ease-in-out
+        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        flex flex-col h-full
+      `}>
+        
+        {/* ================================================================== */}
+        {/* LOGO / MARCA DO SISTEMA */}
+        {/* ================================================================== */}
+        {/**
+         * Cabeçalho com logo e nome do sistema
+         * Border inferior para separação visual
+         * AGORA COM LINK PARA PÁGINA INICIAL E FECHAMENTO NO MOBILE
+         */}
+        <div className="p-6 border-b border-purple-700">
+          <Link href="/" passHref onClick={handleMenuItemClick}>
+            <div className="cursor-pointer">
+              <h1 className="text-2xl font-bold">EntregasWoo</h1>
+              <p className="text-purple-300 text-sm">Sistema de Gestão</p>
+            </div>
+          </Link>
+        </div>
+
+        {/* ================================================================== */}
+        {/* MENU DE NAVEGAÇÃO */}
+        {/* ================================================================== */}
+        {/**
+         * Lista de itens de navegação
+         * Scrollável caso tenha muitos itens
+         * Estilos condicionais para item ativo
+         * ✅ HOME adicionado como primeiro item
+         * ✅ RELATÓRIOS adicionado para admin/gerentes
+         */}
+        <nav className="flex-1 p-4 overflow-y-auto">
+          {menuItems.map((item) => (
+            <Link
+              key={item.path}
+              href={item.path}
+              className={`flex items-center py-3 px-4 rounded-lg mb-2 transition-colors
+                ${router.pathname === item.path
+                  ? 'bg-purple-900 text-white shadow-md' // Item ativo
+                  : 'hover:bg-purple-700 text-purple-200' // Item normal/hover
+                }`}
+              onClick={handleMenuItemClick}
+            >
+              <span className="text-xl mr-3">{item.icon}</span>
+              <span className="font-medium">{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+
+        {/* ================================================================== */}
+        {/* PERFIL DO USUÁRIO (CONDICIONAL) */}
+        {/* ================================================================== */}
+        {/**
+         * ✅ ALTERAÇÃO: Área de perfil só aparece se usuário estiver logado
+         */}
+        {user && (
+          <div className="p-4 border-t border-purple-700 bg-purple-900">
+            <UserProfile />
+          </div>
+        )}
+
+        {/* ================================================================== */}
+        {/* BOTÃO DINÂMICO: ENTRAR/SAIR */}
+        {/* ================================================================== */}
+        {/**
+         * ✅ ALTERAÇÃO CRÍTICA: Botão muda dinamicamente entre "Entrar" e "Sair"
+         * baseado no estado de autenticação do usuário
+         */}
+        <div className="p-4 border-t border-purple-700">
+          {user ? (
+            // ================================================================
+            // USUÁRIO LOGADO: MOSTRA BOTÃO "SAIR"
+            // ================================================================
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center py-2 px-4 bg-purple-700 hover:bg-purple-600 text-white rounded-lg transition-colors"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Sair
+            </button>
+          ) : (
+            // ================================================================
+            // USUÁRIO DESLOGADO: MOSTRA BOTÃO "ENTRAR"
+            // ================================================================
+            <button
+              onClick={handleLoginRedirect}
+              className="w-full flex items-center justify-center py-2 px-4 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+              </svg>
+              Entrar
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default Sidebar;
+
+
+===== UserProfile.js =====
+// components/UserProfile.js (VERSÃO SIMPLIFICADA)
+import { useUserProfile } from '../hooks/useUserProfile';
+
+// ==============================================================================
+// COMPONENTE: PERFIL DO USUÁRIO (VERSÃO SIMPLIFICADA)
+// ==============================================================================
+/**
+ * Versão simplificada para o sidebar - apenas informações básicas
+ * sem botões de edição (agora na página /perfil)
+ */
+const UserProfile = ({ isMobile = false }) => {
+  const { userProfile, userRole, loading } = useUserProfile();
+
+  // ============================================================================
+  // 1. ESTADO DE CARREGAMENTO
+  // ============================================================================
+  if (loading) {
+    return (
+      <div className="p-4 border-t">
+        <div className="animate-pulse">
+          <div className="h-4 bg-purple-700 rounded mb-2"></div>
+          <div className="h-3 bg-purple-700 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // 2. USUÁRIO NÃO AUTENTICADO
+  // ============================================================================
+  if (!userProfile) {
+    return (
+      <div className="p-4 border-t">
+        <p className="text-sm text-purple-300">Visitante</p>
+        <p className="text-xs text-purple-400">Faça login para acessar</p>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // 3. RENDERIZAÇÃO SIMPLIFICADA
+  // ============================================================================
+  return (
+    <div className="p-4 border-t">
+      
+      {/* INFORMAÇÕES BÁSICAS DO USUÁRIO */}
+      <div className="space-y-2">
+        
+        {/* NOME E EMAIL */}
+        <div className="flex items-center">
+          {userProfile.foto && (
+            <img
+              src={userProfile.foto}
+              alt="Foto do usuário"
+              className="w-8 h-8 rounded-full mr-3 border-2 border-purple-600"
+            />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white truncate">
+              {userProfile.nome_completo || userProfile.nome_usuario}
+            </p>
+            <p className="text-xs text-purple-300 truncate">
+              {userProfile.email}
+            </p>
+          </div>
+        </div>
+
+        {/* FUNÇÃO/ROLE (APENAS TEXTO) */}
+        <div className="bg-purple-700 rounded p-1">
+          <p className="text-xs text-center text-white">
+            {userRole === 'admin' && '👑 Admin'}
+            {userRole === 'gerente' && '💼 Gerente'}
+            {userRole === 'entregador' && '🚚 Entregador'}
+            {userRole === 'visitante' && '👤 Visitante'}
+          </p>
+        </div>
+
+        {/* STATUS DE CONEXÃO (SIMPLES) */}
+        <div className="flex items-center justify-between text-xs text-purple-400">
+          <span>🟢 Conectado</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+
+export default UserProfile;
+
+

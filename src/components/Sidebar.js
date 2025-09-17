@@ -1,5 +1,5 @@
 // components/Sidebar.js
-import { useState } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
@@ -10,23 +10,23 @@ import UserProfile from './UserProfile';
 // COMPONENTE SIDEBAR - MENU LATERAL
 // ==============================================================================
 /**
- * Sidebar é o menu de navegação lateral do sistema
- * Contém: Logo, Menu de navegação, Perfil do usuário e Botão de logout
- * Responsivo: Mobile (overlay) e Desktop (fixo)
+ * Sidebar é o menu de navegação lateral do sistema.
+ * Contém: Logo, Menu de navegação, Perfil do usuário e Botão de login/logout.
+ * Responsivo: Mobile (overlay) e Desktop (fixo).
+ * Integra com useUserProfile para gerenciar autenticação.
  */
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const router = useRouter();
-  const { userRole, loading: loadingUser } = useUserProfile();
+  const { user, userRole, loading: loadingUser } = useUserProfile();
   
   // ============================================================================
   // 1. ITENS DO MENU COM RESTRIÇÃO DE ACESSO
   // ============================================================================
   /**
-   * Itens base do menu - visíveis para todos os usuários logados
-   * Inclui páginas básicas de pedidos
+   * Itens base do menu, visíveis para todos os usuários logados.
    */
   const baseItems = [
-    { path: '/', icon: '🏠', label: 'Home' }, // ✅ NOVO ITEM HOME
+    { path: '/', icon: '🏠', label: 'Home' },
     { path: '/pedidos-pendentes', icon: '📋', label: 'Pedidos Pendentes' },
     { path: '/pedidos-aceitos', icon: '✅', label: 'Pedidos Aceitos' },
     { path: '/pedidos-entregues', icon: '🚚', label: 'Pedidos Entregues' },
@@ -35,19 +35,16 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   ];
 
   /**
-   * Itens administrativos - visíveis apenas para gerentes e administradores
-   * Inclui gestão completa e administração
+   * Itens administrativos, visíveis apenas para gerentes e administradores.
    */
   const adminItems = [
     { path: '/todos-pedidos', icon: '📊', label: 'Todos os Pedidos' },
-    { path: '/relatorios', icon: '📈', label: 'Relatórios' }, // ✅ NOVO ITEM RELATÓRIOS
+    { path: '/relatorios', icon: '📈', label: 'Relatórios' },
     { path: '/admin', icon: '⚙️', label: 'Administração' },
   ];
 
   /**
-   * Combina itens conforme a role do usuário
-   * Entregadores: apenas itens base
-   * Gerentes/Admin: itens base + itens administrativos
+   * Combina itens conforme a role do usuário.
    */
   const menuItems = [
     ...baseItems,
@@ -58,34 +55,44 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   // 2. FUNÇÃO: LOGOUT DO USUÁRIO
   // ============================================================================
   /**
-   * Realiza logout do usuário no Supabase Auth
-   * Fecha sidebar no mobile antes de redirecionar
-   * Redireciona para página de login após logout
+   * Realiza o logout do usuário via Supabase.
+   * O useUserProfile lida com a atualização dos estados e redirecionamento.
    */
   const handleLogout = async () => {
     try {
-      // Fechar sidebar no mobile antes delogout
+      // Fechar sidebar no mobile antes do logout
       if (window.innerWidth < 1024) {
         toggleSidebar();
       }
       
-      // Realizar logout via Supabase
+      // Realizar logout
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
-      // Redirecionar para login
-      router.push('/login');
+      console.log('Logout realizado com sucesso');
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
     }
   };
 
   // ============================================================================
-  // 3. FUNÇÃO: FECHAR SIDEBAR AO CLICAR EM ITEM (MOBILE)
+  // 3. FUNÇÃO: REDIRECIONAR PARA LOGIN
   // ============================================================================
   /**
-   * Fecha automaticamente o sidebar no mobile quando um item é clicado
-   * Melhora a experiência mobile evitando overlay permanente
+   * Redireciona para a página de login quando o usuário não está autenticado.
+   */
+  const handleLoginRedirect = () => {
+    if (window.innerWidth < 1024) {
+      toggleSidebar();
+    }
+    router.push('/login');
+  };
+
+  // ============================================================================
+  // 4. FUNÇÃO: FECHAR SIDEBAR AO CLICAR EM ITEM (MOBILE)
+  // ============================================================================
+  /**
+   * Fecha o sidebar no mobile quando um item de menu é clicado.
    */
   const handleMenuItemClick = () => {
     if (window.innerWidth < 1024) {
@@ -94,18 +101,11 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   };
 
   // ============================================================================
-  // 4. RENDERIZAÇÃO DO COMPONENTE
+  // 5. RENDERIZAÇÃO DO COMPONENTE
   // ============================================================================
   return (
     <>
-      {/* ====================================================================== */}
-      {/* OVERLAY PARA MOBILE */}
-      {/* ====================================================================== */}
-      {/**
-       * Overlay escurece o conteúdo de fundo quando sidebar está aberta no mobile
-       * Ao clicar no overlay, fecha automaticamente o sidebar
-       * Visível apenas em dispositivos mobile (lg:hidden)
-       */}
+      {/* Overlay para mobile */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
@@ -113,15 +113,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         />
       )}
       
-      {/* ====================================================================== */}
-      {/* SIDEBAR PRINCIPAL */}
-      {/* ====================================================================== */}
-      {/**
-       * Container principal do sidebar
-       * Mobile: fixed com transição slide
-       * Desktop: static como parte do layout
-       * Background roxo com texto branco para contraste
-       */}
+      {/* Sidebar principal */}
       <div className={`
         fixed lg:static inset-y-0 left-0 z-50
         w-64 bg-purple-800 text-white
@@ -129,15 +121,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         flex flex-col h-full
       `}>
-        
-        {/* ================================================================== */}
-        {/* LOGO / MARCA DO SISTEMA */}
-        {/* ================================================================== */}
-        {/**
-         * Cabeçalho com logo e nome do sistema
-         * Border inferior para separação visual
-         * AGORA COM LINK PARA PÁGINA INICIAL E FECHAMENTO NO MOBILE
-         */}
+        {/* Logo / Marca do sistema */}
         <div className="p-6 border-b border-purple-700">
           <Link href="/" passHref onClick={handleMenuItemClick}>
             <div className="cursor-pointer">
@@ -147,16 +131,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           </Link>
         </div>
 
-        {/* ================================================================== */}
-        {/* MENU DE NAVEGAÇÃO */}
-        {/* ================================================================== */}
-        {/**
-         * Lista de itens de navegação
-         * Scrollável caso tenha muitos itens
-         * Estilos condicionais para item ativo
-         * ✅ HOME adicionado como primeiro item
-         * ✅ RELATÓRIOS adicionado para admin/gerentes
-         */}
+        {/* Menu de navegação */}
         <nav className="flex-1 p-4 overflow-y-auto">
           {menuItems.map((item) => (
             <Link
@@ -164,8 +139,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               href={item.path}
               className={`flex items-center py-3 px-4 rounded-lg mb-2 transition-colors
                 ${router.pathname === item.path
-                  ? 'bg-purple-900 text-white shadow-md' // Item ativo
-                  : 'hover:bg-purple-700 text-purple-200' // Item normal/hover
+                  ? 'bg-purple-900 text-white shadow-md'
+                  : 'hover:bg-purple-700 text-purple-200'
                 }`}
               onClick={handleMenuItemClick}
             >
@@ -175,35 +150,36 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           ))}
         </nav>
 
-        {/* ================================================================== */}
-        {/* PERFIL DO USUÁRIO */}
-        {/* ================================================================== */}
-        {/**
-         * Área de perfil do usuário logado
-         * Mostra foto, nome, email, função e lojas associadas
-         * Fundo mais escuro para destaque
-         */}
-        <div className="p-4 border-t border-purple-700 bg-purple-900">
-          <UserProfile />
-        </div>
+        {/* Perfil do usuário (condicional) */}
+        {user && (
+          <div className="p-4 border-t border-purple-700 bg-purple-900">
+            <UserProfile />
+          </div>
+        )}
 
-        {/* ================================================================== */}
-        {/* BOTÃO DE LOGOUT */}
-        {/* ================================================================== */}
-        {/**
-         * Botão para desconectar o usuário do sistema
-         * Estilo destacado para ação importante
-         */}
+        {/* Botão dinâmico: Entrar/Sair */}
         <div className="p-4 border-t border-purple-700">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center justify-center py-2 px-4 bg-purple-700 hover:bg-purple-600 text-white rounded-lg transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Sair
-          </button>
+          {user ? (
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center py-2 px-4 bg-purple-700 hover:bg-purple-600 text-white rounded-lg transition-colors"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Sair
+            </button>
+          ) : (
+            <button
+              onClick={handleLoginRedirect}
+              className="w-full flex items-center justify-center py-2 px-4 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l-4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+              </svg>
+              Entrar
+            </button>
+          )}
         </div>
       </div>
     </>

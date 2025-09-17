@@ -84,4 +84,6 @@ const UserProfile = ({ isMobile = false }) => {
   );
 };
 
+
+
 export default UserProfile;
