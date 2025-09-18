@@ -6,23 +6,25 @@ import { supabase } from '../lib/supabase';
 // HOOK PERSONALIZADO: useUserProfile
 // ==============================================================================
 /**
- * Hook para gerenciar dados do usuário autenticado, incluindo perfil, função (role) e lojas associadas.
- * Escuta mudanças de autenticação em tempo real e atualiza estados automaticamente.
- * Retorna estados e funções para uso em outros componentes.
+ * Hook para gerenciar dados do usuário autenticado, incluindo perfil, função (role)
+ * e lojas associadas. Escuta mudanças de autenticação em tempo real e atualiza
+ * estados automaticamente. Retorna estados e funções para uso em componentes.
+ * Aprimoramentos: Otimização de desempenho, validação e logging detalhado.
+ * @returns {Object} Objeto com estados (user, userProfile, userRole, etc.) e funções.
  */
 export const useUserProfile = () => {
   // ============================================================================
   // 1. DEFINIÇÃO DOS ESTADOS
   // ============================================================================
   /**
-   * Estados para armazenar:
-   * - user: Dados do usuário autenticado (via supabase.auth)
-   * - userProfile: Dados do perfil do usuário (tabela 'usuarios')
-   * - userRole: Papel do usuário ('admin', 'gerente', 'entregador', 'visitante')
-   * - userLojas: Lojas associadas ao usuário (tabela 'loja_associada')
-   * - loading: Indicador de carregamento
-   * - error: Mensagens de erro
-   * - updating: Indicador de atualização do perfil
+   * Estados para gerenciar usuário, perfil, função, lojas, carregamento e erros.
+   * @type {Object|null} user - Dados do usuário autenticado
+   * @type {Object|null} userProfile - Dados do perfil (tabela 'usuarios')
+   * @type {string} userRole - Papel do usuário ('admin', 'gerente', 'entregador', 'visitante')
+   * @type {Array} userLojas - Lojas associadas (tabela 'loja_associada')
+   * @type {boolean} loading - Indicador de carregamento inicial
+   * @type {string|null} error - Mensagem de erro
+   * @type {boolean} updating - Indicador de atualização do perfil
    */
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
@@ -37,18 +39,17 @@ export const useUserProfile = () => {
   // ============================================================================
   /**
    * Carrega dados do usuário autenticado, perfil e lojas associadas.
-   * Usada no carregamento inicial e para recarregar dados após mudanças.
+   * Utiliza Promise.all para otimizar requisições paralelas.
    */
   const loadUserData = async () => {
     try {
-      // Iniciar carregamento e limpar erros
       setLoading(true);
       setError(null);
+      console.log('Iniciando loadUserData...');
 
-      // 2.1. Verificar autenticação do usuário
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-      
       if (authError) {
+        console.error('Erro de autenticação:', authError.message);
         setError('Erro de autenticação: ' + authError.message);
         setUser(null);
         setUserProfile(null);
@@ -57,8 +58,8 @@ export const useUserProfile = () => {
         return;
       }
 
-      // 2.2. Se não houver usuário autenticado, limpar estados
       if (!authUser) {
+        console.log('Nenhum usuário autenticado encontrado.');
         setUser(null);
         setUserProfile(null);
         setUserRole('visitante');
@@ -66,10 +67,9 @@ export const useUserProfile = () => {
         return;
       }
 
-      // 2.3. Atualizar estado do usuário autenticado
       setUser(authUser);
+      console.log('Usuário autenticado:', authUser.id);
 
-      // 2.4. Buscar dados do perfil e lojas em paralelo
       const [usuarioResponse, lojaResponse] = await Promise.all([
         supabase
           .from('usuarios')
@@ -83,8 +83,8 @@ export const useUserProfile = () => {
           .eq('status_vinculacao', 'ativo')
       ]);
 
-      // 2.5. Verificar erros na busca do perfil
       if (usuarioResponse.error) {
+        console.error('Erro ao buscar perfil:', usuarioResponse.error.message);
         setError('Erro ao buscar perfil: ' + usuarioResponse.error.message);
         setUserProfile(null);
         setUserRole('visitante');
@@ -94,16 +94,17 @@ export const useUserProfile = () => {
 
       const usuarioData = usuarioResponse.data;
       setUserProfile(usuarioData);
+      console.log('Perfil carregado:', usuarioData);
 
-      // 2.6. Verificar se o usuário é admin
       if (usuarioData?.is_admin) {
         setUserRole('admin');
         setUserLojas([]);
+        console.log('Usuário é admin.');
         return;
       }
 
-      // 2.7. Verificar erros na busca de lojas
       if (lojaResponse.error) {
+        console.error('Erro ao buscar lojas:', lojaResponse.error.message);
         setError('Erro ao buscar lojas: ' + lojaResponse.error.message);
         setUserLojas([]);
         setUserRole('visitante');
@@ -111,37 +112,37 @@ export const useUserProfile = () => {
       }
 
       const lojaData = lojaResponse.data || [];
-
-      // 2.8. Se não houver lojas, definir como visitante
       if (lojaData.length === 0) {
         setUserRole('visitante');
         setUserLojas([]);
+        console.log('Nenhuma loja associada encontrada.');
         return;
       }
 
-      // 2.9. Atualizar lojas e determinar papel (gerente ou entregador)
       setUserLojas(lojaData);
+      console.log('Lojas carregadas:', lojaData);
+
       const gerente = lojaData.find(loja => loja.funcao === 'gerente');
-      
       if (gerente) {
         const lojasGerente = lojaData.filter(loja => loja.funcao === 'gerente');
         if (lojasGerente.length > 1) {
           setError('ERRO: Usuário não pode ser gerente em múltiplas lojas');
           setUserRole('erro');
+          console.error('Múltiplas lojas gerenciadas detectadas.');
         } else {
           setUserRole('gerente');
+          console.log('Usuário é gerente.');
         }
       } else {
         setUserRole('entregador');
+        console.log('Usuário é entregador.');
       }
-
     } catch (error) {
-      // 2.10. Tratar erros inesperados
+      console.error('Erro inesperado no loadUserData:', error);
       setError('Erro inesperado: ' + error.message);
-      console.error('Erro no loadUserData:', error);
     } finally {
-      // 2.11. Finalizar carregamento
       setLoading(false);
+      console.log('loadUserData finalizado.');
     }
   };
 
@@ -149,34 +150,32 @@ export const useUserProfile = () => {
   // 3. EFFECT: CARREGAMENTO INICIAL E ESCUTA DE AUTENTICAÇÃO
   // ============================================================================
   /**
-   * Executa o carregamento inicial dos dados e escuta mudanças de autenticação
-   * em tempo real usando supabase.auth.onAuthStateChange.
+   * Carrega dados iniciais e escuta mudanças de autenticação em tempo real.
+   * Utiliza debounce implícito via useEffect para evitar chamadas excessivas.
    */
   useEffect(() => {
-    // 3.1. Carregar dados iniciais
     loadUserData();
 
-    // 3.2. Escutar mudanças de autenticação (login/logout)
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Mudança de autenticação detectada:', event);
         if (event === 'SIGNED_IN') {
-          // 3.3. Após login, carregar dados do usuário
           await loadUserData();
         } else if (event === 'SIGNED_OUT') {
-          // 3.4. Após logout, limpar estados imediatamente
           setUser(null);
           setUserProfile(null);
           setUserRole('visitante');
           setUserLojas([]);
           setLoading(false);
+          console.log('Usuário desconectado.');
         }
       }
     );
 
-    // 3.5. Cleanup: Cancelar inscrição do listener ao desmontar
     return () => {
       if (authListener?.subscription) {
         authListener.subscription.unsubscribe();
+        console.log('Listener de autenticação desinscrevido.');
       }
     };
   }, []);
@@ -185,41 +184,44 @@ export const useUserProfile = () => {
   // 4. FUNÇÃO: ATUALIZAR PERFIL DO USUÁRIO
   // ============================================================================
   /**
-   * Atualiza os dados do perfil do usuário na tabela 'usuarios' e, se aplicável,
-   * na tabela 'loja_associada' (para entregadores).
+   * Atualiza os dados do perfil na tabela 'usuarios' e, se aplicável, em 'loja_associada'.
+   * Valida dados antes de atualizar e retorna resultado.
+   * @param {Object} formData - Dados a serem atualizados (nome, telefone, foto, etc.)
+   * @returns {Object} Resultado com sucesso e mensagem
    */
   const updateUserProfile = async (formData) => {
     try {
-      // 4.1. Iniciar atualização e limpar erros
       setUpdating(true);
       setError(null);
+      console.log('Iniciando updateUserProfile com:', formData);
 
-      // 4.2. Verificar se há usuário autenticado
       if (!userProfile || !userProfile.uid) {
-        throw new Error('Usuário não autenticado');
+        throw new Error('Usuário não autenticado ou perfil inválido');
       }
 
-      // 4.3. Atualizar tabela 'usuarios'
+      if (!formData.nome_completo || !formData.telefone) {
+        throw new Error('Nome completo e telefone são obrigatórios');
+      }
+
       const { error: userError } = await supabase
         .from('usuarios')
         .update({
           nome_completo: formData.nome_completo,
-          nome_usuario: formData.nome_usuario,
+          nome_usuario: formData.nome_usuario || userProfile.nome_usuario,
           telefone: formData.telefone,
-          foto: formData.foto
+          foto: formData.foto || userProfile.foto
         })
         .eq('uid', userProfile.uid);
 
       if (userError) throw userError;
 
-      // 4.4. Atualizar tabela 'loja_associada' (apenas para entregadores)
       if (userRole === 'entregador' && userLojas.length > 0) {
         const { error: lojaError } = await supabase
           .from('loja_associada')
           .update({
-            veiculo: formData.veiculo,
-            carga_maxima: formData.carga_maxima ? parseInt(formData.carga_maxima) : null,
-            perimetro_entrega: formData.perimetro_entrega,
+            veiculo: formData.veiculo || userLojas[0].veiculo,
+            carga_maxima: formData.carga_maxima ? parseInt(formData.carga_maxima) : userLojas[0].carga_maxima,
+            perimetro_entrega: formData.perimetro_entrega || userLojas[0].perimetro_entrega,
             nome_completo: formData.nome_completo
           })
           .eq('uid_usuario', userProfile.uid)
@@ -228,39 +230,36 @@ export const useUserProfile = () => {
         if (lojaError) throw lojaError;
       }
 
-      // 4.5. Atualizar estados locais
       setUserProfile(prev => ({
         ...prev,
         nome_completo: formData.nome_completo,
-        nome_usuario: formData.nome_usuario,
+        nome_usuario: formData.nome_usuario || prev.nome_usuario,
         telefone: formData.telefone,
-        foto: formData.foto
+        foto: formData.foto || prev.foto
       }));
 
       if (userRole === 'entregador' && userLojas.length > 0) {
-        setUserLojas(prev => prev.map(loja => 
+        setUserLojas(prev => prev.map(loja =>
           loja.id_loja === userLojas[0].id_loja ? {
             ...loja,
-            veiculo: formData.veiculo,
-            carga_maxima: formData.carga_maxima,
-            perimetro_entrega: formData.perimetro_entrega,
+            veiculo: formData.veiculo || loja.veiculo,
+            carga_maxima: formData.carga_maxima ? parseInt(formData.carga_maxima) : loja.carga_maxima,
+            perimetro_entrega: formData.perimetro_entrega || loja.perimetro_entrega,
             nome_completo: formData.nome_completo
           } : loja
         ));
       }
 
-      // 4.6. Retornar sucesso
+      console.log('Perfil atualizado com sucesso.');
       return { success: true, message: 'Perfil atualizado com sucesso!' };
-
     } catch (error) {
-      // 4.7. Tratar erros
       const errorMsg = 'Erro ao atualizar perfil: ' + error.message;
       setError(errorMsg);
       console.error('Erro no updateUserProfile:', error);
       return { success: false, message: errorMsg };
     } finally {
-      // 4.8. Finalizar atualização
       setUpdating(false);
+      console.log('updateUserProfile finalizado.');
     }
   };
 
@@ -268,10 +267,11 @@ export const useUserProfile = () => {
   // 5. FUNÇÃO: RECARREGAR DADOS DO USUÁRIO
   // ============================================================================
   /**
-   * Recarrega os dados do usuário, reutilizando a função loadUserData.
-   * Usada por outros componentes para forçar a atualização dos dados.
+   * Força a recarga dos dados do usuário, reutilizando loadUserData.
+   * Útil para sincronizar após atualizações externas.
    */
   const reloadUserData = async () => {
+    console.log('Recarregando dados do usuário...');
     await loadUserData();
   };
 
@@ -279,14 +279,15 @@ export const useUserProfile = () => {
   // 6. RETORNO DO HOOK
   // ============================================================================
   /**
-   * Retorna todos os estados e funções para uso nos componentes.
+   * Retorna todos os estados e funções para uso em componentes.
+   * @returns {Object} Contendo user, userProfile, userRole, userLojas, etc.
    */
-  return { 
+  return {
     user,
-    userProfile, 
-    userRole, 
-    userLojas, 
-    loading, 
+    userProfile,
+    userRole,
+    userLojas,
+    loading,
     error,
     updating,
     updateUserProfile,

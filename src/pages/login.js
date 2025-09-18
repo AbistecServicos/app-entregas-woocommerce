@@ -1,5 +1,5 @@
 // pages/login.js
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; // Adicionado useEffect
 import { supabase } from '../lib/supabase';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -8,51 +8,77 @@ import { useRouter } from 'next/router';
 // COMPONENTE PRINCIPAL - PÁGINA DE LOGIN
 // ==============================================================================
 /**
- * Esta página oferece login via Google OAuth e um modal para login com email/senha.
- * Inclui links para cadastro e recuperação de senha, refletindo a árvore de arquivos.
- * Após login, redireciona com base no perfil (admin, gerente, entregador).
- * Aprendizado: Modal com estado controlado melhora UX ao alternar entre métodos de login.
+ * Página de login com suporte a autenticação via Google OAuth e email/senha.
+ * Inclui modal controlado, redirecionamento baseado em perfil (admin, gerente, entregador)
+ * e links para cadastro e recuperação de senha.
+ * Aprimoramentos: Validação de formulário, acessibilidade e feedback visual.
  */
 export default function Login() {
   // ============================================================================
-  // 1. ESTADOS DO COMPONENTE (BLOCO DE ESTADOS)
+  // 1. ESTADOS DO COMPONENTE
   // ============================================================================
-  // Aprendizado: useState gerencia dados dinâmicos como formulário, modal e erros.
+  /**
+   * Gerencia dados do formulário, estado de carregamento, erros e visibilidade.
+   * Adicionado estado para validação de formulário.
+   */
   const [email, setEmail] = useState('');              // Email do usuário
   const [password, setPassword] = useState('');        // Senha do usuário
   const [loading, setLoading] = useState(false);       // Estado de carregamento
   const [error, setError] = useState('');              // Mensagens de erro
   const [showPassword, setShowPassword] = useState(false); // Visibilidade da senha
   const [isModalOpen, setIsModalOpen] = useState(false);  // Controle do modal
-  const router = useRouter();                          // Para navegação
+  const [formValid, setFormValid] = useState(false);    // Validação do formulário
+  const router = useRouter();
 
   // ============================================================================
-  // 2. FUNÇÃO: LOGIN COM EMAIL/SENHA (BLOCO DE FUNÇÃO ASSÍNCRONA)
+  // 2. FUNÇÃO: VALIDAR FORMULÁRIO
   // ============================================================================
-  // Aprendizado: Validações e chamadas API com try/catch para segurança.
+  /**
+   * Valida email e senha em tempo real, atualizando o estado de validade.
+   * Requisitos: Email válido e senha com no mínimo 6 caracteres.
+   */
+  const validateForm = () => {
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const passwordValid = password.length >= 6;
+    setFormValid(emailValid && passwordValid);
+  };
+
+  useEffect(() => {
+    validateForm();
+  }, [email, password]);
+
+  // ============================================================================
+  // 3. FUNÇÃO: LOGIN COM EMAIL/SENHA
+  // ============================================================================
+  /**
+   * Autentica o usuário com email/senha e redireciona com base no perfil.
+   * Inclui validação prévia e tratamento de erros detalhado.
+   */
   const handleLogin = async (e) => {
-    e.preventDefault(); // Previne recarregamento da página
-    setLoading(true);   // Ativa loading
-    setError('');       // Limpa erros
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    if (!formValid) {
+      setError('Por favor, insira um email válido e uma senha com pelo menos 6 caracteres.');
+      setLoading(false);
+      return;
+    }
 
     try {
-      // 2.1. AUTENTICAÇÃO COM SUPABASE
-      // Aprendizado: signInWithPassword autentica usuário com email/senha.
+      // 3.1. AUTENTICAÇÃO COM SUPABASE
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-
       if (authError) throw authError;
 
-      // 2.2. VERIFICAÇÃO DE PERFIL E REDIRECIONAMENTO
-      // Aprendizado: Lógica condicional baseada em role (admin, gerente, entregador).
+      // 3.2. VERIFICAÇÃO DE PERFIL E REDIRECIONAMENTO
       const { data: usuario, error: userError } = await supabase
         .from('usuarios')
         .select('is_admin')
         .eq('uid', authData.user.id)
         .single();
-
       if (userError) throw userError;
 
       if (usuario.is_admin) {
@@ -65,10 +91,10 @@ export default function Login() {
         .select('funcao')
         .eq('uid_usuario', authData.user.id)
         .eq('status_vinculacao', 'ativo');
-
       if (assocError) throw new Error('Erro ao verificar permissões: ' + assocError.message);
 
       if (!associacoes || associacoes.length === 0) {
+        alert('Você não possui acesso ativo. Contate o administrador.');
         throw new Error('Usuário sem acesso ativo. Contate o administrador.');
       }
 
@@ -84,21 +110,24 @@ export default function Login() {
           throw new Error('Função não reconhecida.');
       }
     } catch (error) {
-      // 2.3. TRATAMENTO DE ERROS
-      // Aprendizado: Exibe erro ao usuário e registra para debug.
-      setError(error.message);
+      // 3.3. TRATAMENTO DE ERROS
+      setError(error.message.includes('Invalid login credentials')
+        ? 'Email ou senha inválidos.'
+        : error.message);
       console.error('Erro no login:', error);
     } finally {
-      // 2.4. FINALIZAÇÃO
-      // Aprendizado: Garante reset de loading.
+      // 3.4. FINALIZAÇÃO
       setLoading(false);
     }
   };
 
   // ============================================================================
-  // 3. FUNÇÃO: LOGIN COM GOOGLE (BLOCO DE FUNÇÃO ASSÍNCRONA)
+  // 4. FUNÇÃO: LOGIN COM GOOGLE
   // ============================================================================
-  // Aprendizado: OAuth simplifica login social com redirecionamento.
+  /**
+   * Inicia o fluxo de login com Google OAuth, redirecionando para completar perfil.
+   * Inclui tratamento de erros e feedback visual.
+   */
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
@@ -106,7 +135,7 @@ export default function Login() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/perfil`, // Redireciona para completar perfil
+          redirectTo: `${window.location.origin}/perfil`,
         },
       });
       if (error) throw error;
@@ -119,38 +148,57 @@ export default function Login() {
   };
 
   // ============================================================================
-  // 4. RENDERIZAÇÃO DO COMPONENTE (BLOCO DE JSX)
+  // 5. RENDERIZAÇÃO DO COMPONENTE
   // ============================================================================
-  // Aprendizado: Estrutura com gradiente, card e modal. Condicionais gerenciam visibilidade.
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 via-blue-600 to-purple-800">
       <div className="max-w-md w-full mx-auto">
         
-        {/* 4.1. SEÇÃO VISUAL: LOGO E TÍTULO */}
+        {/* 5.1. SEÇÃO VISUAL: LOGO E TÍTULO */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-white rounded-full mx-auto mb-4 flex items-center justify-center">
+          <div
+            className="w-20 h-20 bg-white rounded-full mx-auto mb-4 flex items-center justify-center"
+            role="img"
+            aria-label="Ícone de entrega"
+          >
             <span className="text-3xl text-purple-600">🚚</span>
           </div>
-          <h2 className="text-3xl font-bold text-white">EntregasWoo</h2>
+          <h1 className="text-3xl font-bold text-white">EntregasWoo</h1>
           <p className="text-purple-200 mt-2">Sistema de Gestão de Entregas</p>
         </div>
 
-        {/* 4.2. CARD PRINCIPAL: CONTAINER DE LOGIN */}
+        {/* 5.2. CARD PRINCIPAL: CONTAINER DE LOGIN */}
         <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h3 className="text-2xl font-bold text-gray-800 text-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800 text-center mb-6" id="login-title">
             Acessar Sistema
-          </h3>
+          </h2>
 
-          {/* 4.2.1. EXIBIÇÃO DE ERRO */}
-          {error && <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">{error}</div>}
+          {/* 5.2.1. EXIBIÇÃO DE ERRO */}
+          {error && (
+            <div
+              className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4"
+              role="alert"
+            >
+              {error}
+            </div>
+          )}
 
-          {/* 4.2.2. BOTÃO DE LOGIN GOOGLE */}
+          {/* 5.2.2. BOTÃO DE LOGIN GOOGLE */}
           <button
             onClick={handleGoogleLogin}
             disabled={loading}
             className="w-full flex items-center justify-center py-3 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Login com Google"
           >
-            {loading ? <span>Carregando...</span> : (
+            {loading ? (
+              <span className="flex items-center">
+                <svg className="animate-spin h-5 w-5 mr-2 text-white" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Carregando...
+              </span>
+            ) : (
               <>
                 <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -163,49 +211,82 @@ export default function Login() {
             )}
           </button>
 
-          {/* 4.2.3. ABRE MODAL PARA LOGIN EMAIL/SENHA */}
+          {/* 5.2.3. ABRE MODAL PARA LOGIN EMAIL/SENHA */}
           <div className="mt-4 text-center">
             <button
               onClick={() => setIsModalOpen(true)}
               className="text-purple-600 hover:text-purple-800 font-medium"
+              aria-controls="email-login-modal"
             >
               Ou entre com email e senha
             </button>
           </div>
 
-          {/* 4.2.4. MODAL DE LOGIN EMAIL/SENHA */}
+          {/* 5.2.4. MODAL DE LOGIN EMAIL/SENHA */}
           {isModalOpen && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div
+              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+              role="dialog"
+              aria-labelledby="email-login-modal-title"
+              aria-modal="true"
+            >
               <div className="bg-white rounded-2xl shadow-2xl p-6 w-96">
-                <h4 className="text-xl font-bold text-gray-800 mb-4">Login com Email</h4>
-                {error && <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">{error}</div>}
+                <h3
+                  id="email-login-modal-title"
+                  className="text-xl font-bold text-gray-800 mb-4"
+                >
+                  Login com Email
+                </h3>
+                {error && (
+                  <div
+                    className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4"
+                    role="alert"
+                  >
+                    {error}
+                  </div>
+                )}
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Email</label>
+                    <label
+                      htmlFor="email-input"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Email
+                    </label>
                     <input
+                      id="email-input"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
                       required
                       disabled={loading}
+                      aria-required="true"
                     />
                   </div>
                   <div className="relative">
-                    <label className="block text-sm font-medium text-gray-700">Senha</label>
+                    <label
+                      htmlFor="password-input"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Senha
+                    </label>
                     <input
+                      id="password-input"
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
                       required
                       disabled={loading}
+                      aria-required="true"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute inset-y-0 right-0 pr-3 flex items-center mt-1"
                       disabled={loading}
+                      aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                     >
                       {showPassword ? (
                         <svg className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -221,15 +302,27 @@ export default function Login() {
                   </div>
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 focus:ring-2 focus:ring-purple-500"
+                    disabled={loading || !formValid}
+                    className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label="Enviar login"
                   >
-                    {loading ? 'Entrando...' : 'Entrar'}
+                    {loading ? (
+                      <span className="flex items-center justify-center">
+                        <svg className="animate-spin h-5 w-5 mr-2 text-white" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Entrando...
+                      </span>
+                    ) : (
+                      'Entrar'
+                    )}
                   </button>
                 </form>
                 <button
                   onClick={() => setIsModalOpen(false)}
                   className="mt-4 w-full text-gray-500 hover:text-gray-700"
+                  aria-label="Fechar modal"
                 >
                   Fechar
                 </button>
@@ -237,20 +330,28 @@ export default function Login() {
             </div>
           )}
 
-          {/* 4.2.5. LINKS EXTRAS */}
+          {/* 5.2.5. LINKS EXTRAS */}
           <div className="mt-6 text-center space-y-3">
-            <Link href="/cadastro" className="text-purple-600 hover:text-purple-800 text-sm font-medium">
+            <Link
+              href="/cadastro"
+              className="text-purple-600 hover:text-purple-800 text-sm font-medium"
+              aria-label="Criar nova conta"
+            >
               Criar nova conta
             </Link>
-            <Link href="/recuperar-senha" className="text-gray-500 hover:text-gray-700 text-sm">
+            <Link
+              href="/recuperar-senha"
+              className="text-gray-500 hover:text-gray-700 text-sm"
+              aria-label="Recuperar senha"
+            >
               Esqueceu sua senha?
             </Link>
           </div>
         </div>
 
-        {/* 4.3. SEÇÃO DE RODAPÉ */}
+        {/* 5.3. SEÇÃO DE RODAPÉ */}
         <div className="text-center mt-8">
-          <p className="text-purple-200 text-sm">
+          <p className="text-purple-200 text-sm" aria-label="Copyright 2025">
             © 2025 EntregasWoo - Sistema de Gestão
           </p>
         </div>
