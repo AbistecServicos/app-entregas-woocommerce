@@ -830,7 +830,7 @@ export default RouteGuard;
 
 ===== Sidebar.js =====
 // components/Sidebar.js
-import { useState, useEffect } from 'react'; // ✅ Adicionar useEffect
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
@@ -841,50 +841,20 @@ import UserProfile from './UserProfile';
 // COMPONENTE SIDEBAR - MENU LATERAL
 // ==============================================================================
 /**
- * Sidebar é o menu de navegação lateral do sistema
- * Contém: Logo, Menu de navegação, Perfil do usuário e Botão de logout
- * Responsivo: Mobile (overlay) e Desktop (fixo)
- * ✅ NOVO: Escuta mudanças de autenticação em tempo real
+ * Sidebar é o menu de navegação lateral do sistema.
+ * Contém: Logo, Menu de navegação, Perfil do usuário e Botão de login/logout.
+ * Responsivo: Mobile (overlay) e Desktop (fixo).
+ * Integra com useUserProfile para gerenciar autenticação.
  */
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const router = useRouter();
-  const { user, userRole, loading: loadingUser, reloadUserData } = useUserProfile(); // ✅ Adicionar reloadUserData
+  const { user, userRole, loading: loadingUser } = useUserProfile();
   
   // ============================================================================
-  // 1. EFFECT: ESCUTAR MUDANÇAS DE AUTENTICAÇÃO (NOVO)
+  // 1. ITENS DO MENU COM RESTRIÇÃO DE ACESSO
   // ============================================================================
   /**
-   * ✅ NOVO: Escuta mudanças no estado de autenticação do Supabase
-   * Atualiza automaticamente quando usuário faz login ou logout
-   * Preserva a integridade do código existente
-   */
-  useEffect(() => {
-    // Inscrever para receber eventos de mudança de autenticação
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        // Recarregar dados do usuário quando houver mudança de autenticação
-        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-          if (reloadUserData) {
-            await reloadUserData();
-          }
-        }
-      }
-    );
-
-    // Cleanup: cancelar a inscrição quando o componente for desmontado
-    return () => {
-      if (authListener && authListener.unsubscribe) {
-        authListener.unsubscribe();
-      }
-    };
-  }, [reloadUserData]); // ✅ Dependência: reloadUserData
-
-  // ============================================================================
-  // 2. ITENS DO MENU COM RESTRIÇÃO DE ACESSO
-  // ============================================================================
-  /**
-   * Itens base do menu - visíveis para todos os usuários logados
-   * Inclui páginas básicas de pedidos
+   * Itens base do menu, visíveis para todos os usuários logados.
    */
   const baseItems = [
     { path: '/', icon: '🏠', label: 'Home' },
@@ -896,8 +866,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   ];
 
   /**
-   * Itens administrativos - visíveis apenas para gerentes e administradores
-   * Inclui gestão completa e administração
+   * Itens administrativos, visíveis apenas para gerentes e administradores.
    */
   const adminItems = [
     { path: '/todos-pedidos', icon: '📊', label: 'Todos os Pedidos' },
@@ -906,49 +875,42 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   ];
 
   /**
-   * Combina itens conforme a role do usuário
-   * Entregadores: apenas itens base
-   * Gerentes/Admin: itens base + itens administrativos
+   * Combina itens conforme a role do usuário.
    */
   const menuItems = [
     ...baseItems,
     ...((userRole === 'admin' || userRole === 'gerente') ? adminItems : [])
   ];
 
-// ============================================================================
-// 3. FUNÇÃO: LOGOUT DO USUÁRIO (CORRIGIDA)
-// ============================================================================
-/**
- * ✅ CORREÇÃO: Logout com redirecionamento imediato SEM esperar reloadUserData
- * O listener de auth state change vai cuidar da atualização da UI
- */
-const handleLogout = async () => {
-  try {
-    // Fechar sidebar no mobile antes do logout
-    if (window.innerWidth < 1024) {
-      toggleSidebar();
-    }
-    
-    // Realizar logout via Supabase
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    
-    console.log('Logout realizado com sucesso');
-    
-    // ✅ CORREÇÃO: Redirecionar IMEDIATAMENTE para login
-    // O listener onAuthStateChange vai atualizar a UI automaticamente
-    router.push('/login');
-    
-  } catch (error) {
-    console.error('Erro ao fazer logout:', error);
-  }
-};
-
   // ============================================================================
-  // 4. FUNÇÃO: REDIRECIONAR PARA LOGIN
+  // 2. FUNÇÃO: LOGOUT DO USUÁRIO
   // ============================================================================
   /**
-   * Redireciona para página de login quando usuário não está autenticado
+   * Realiza o logout do usuário via Supabase.
+   * O useUserProfile lida com a atualização dos estados e redirecionamento.
+   */
+  const handleLogout = async () => {
+    try {
+      // Fechar sidebar no mobile antes do logout
+      if (window.innerWidth < 1024) {
+        toggleSidebar();
+      }
+      
+      // Realizar logout
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      console.log('Logout realizado com sucesso');
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+    }
+  };
+
+  // ============================================================================
+  // 3. FUNÇÃO: REDIRECIONAR PARA LOGIN
+  // ============================================================================
+  /**
+   * Redireciona para a página de login quando o usuário não está autenticado.
    */
   const handleLoginRedirect = () => {
     if (window.innerWidth < 1024) {
@@ -958,11 +920,10 @@ const handleLogout = async () => {
   };
 
   // ============================================================================
-  // 5. FUNÇÃO: FECHAR SIDEBAR AO CLICAR EM ITEM (MOBILE)
+  // 4. FUNÇÃO: FECHAR SIDEBAR AO CLICAR EM ITEM (MOBILE)
   // ============================================================================
   /**
-   * Fecha automaticamente o sidebar no mobile quando um item é clicado
-   * Melhora a experiência mobile evitando overlay permanente
+   * Fecha o sidebar no mobile quando um item de menu é clicado.
    */
   const handleMenuItemClick = () => {
     if (window.innerWidth < 1024) {
@@ -971,18 +932,11 @@ const handleLogout = async () => {
   };
 
   // ============================================================================
-  // 6. RENDERIZAÇÃO DO COMPONENTE
+  // 5. RENDERIZAÇÃO DO COMPONENTE
   // ============================================================================
   return (
     <>
-      {/* ====================================================================== */}
-      {/* OVERLAY PARA MOBILE */}
-      {/* ====================================================================== */}
-      {/**
-       * Overlay escurece o conteúdo de fundo quando sidebar está aberta no mobile
-       * Ao clicar no overlay, fecha automaticamente o sidebar
-       * Visível apenas em dispositivos mobile (lg:hidden)
-       */}
+      {/* Overlay para mobile */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
@@ -990,15 +944,7 @@ const handleLogout = async () => {
         />
       )}
       
-      {/* ====================================================================== */}
-      {/* SIDEBAR PRINCIPAL */}
-      {/* ====================================================================== */}
-      {/**
-       * Container principal do sidebar
-       * Mobile: fixed com transição slide
-       * Desktop: static como parte do layout
-       * Background roxo com texto branco para contraste
-       */}
+      {/* Sidebar principal */}
       <div className={`
         fixed lg:static inset-y-0 left-0 z-50
         w-64 bg-purple-800 text-white
@@ -1006,15 +952,7 @@ const handleLogout = async () => {
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         flex flex-col h-full
       `}>
-        
-        {/* ================================================================== */}
-        {/* LOGO / MARCA DO SISTEMA */}
-        {/* ================================================================== */}
-        {/**
-         * Cabeçalho com logo e nome do sistema
-         * Border inferior para separação visual
-         * AGORA COM LINK PARA PÁGINA INICIAL E FECHAMENTO NO MOBILE
-         */}
+        {/* Logo / Marca do sistema */}
         <div className="p-6 border-b border-purple-700">
           <Link href="/" passHref onClick={handleMenuItemClick}>
             <div className="cursor-pointer">
@@ -1024,16 +962,7 @@ const handleLogout = async () => {
           </Link>
         </div>
 
-        {/* ================================================================== */}
-        {/* MENU DE NAVEGAÇÃO */}
-        {/* ================================================================== */}
-        {/**
-         * Lista de itens de navegação
-         * Scrollável caso tenha muitos itens
-         * Estilos condicionais para item ativo
-         * ✅ HOME adicionado como primeiro item
-         * ✅ RELATÓRIOS adicionado para admin/gerentes
-         */}
+        {/* Menu de navegação */}
         <nav className="flex-1 p-4 overflow-y-auto">
           {menuItems.map((item) => (
             <Link
@@ -1041,8 +970,8 @@ const handleLogout = async () => {
               href={item.path}
               className={`flex items-center py-3 px-4 rounded-lg mb-2 transition-colors
                 ${router.pathname === item.path
-                  ? 'bg-purple-900 text-white shadow-md' // Item ativo
-                  : 'hover:bg-purple-700 text-purple-200' // Item normal/hover
+                  ? 'bg-purple-900 text-white shadow-md'
+                  : 'hover:bg-purple-700 text-purple-200'
                 }`}
               onClick={handleMenuItemClick}
             >
@@ -1052,30 +981,16 @@ const handleLogout = async () => {
           ))}
         </nav>
 
-        {/* ================================================================== */}
-        {/* PERFIL DO USUÁRIO (CONDICIONAL) */}
-        {/* ================================================================== */}
-        {/**
-         * ✅ ALTERAÇÃO: Área de perfil só aparece se usuário estiver logado
-         */}
+        {/* Perfil do usuário (condicional) */}
         {user && (
           <div className="p-4 border-t border-purple-700 bg-purple-900">
             <UserProfile />
           </div>
         )}
 
-        {/* ================================================================== */}
-        {/* BOTÃO DINÂMICO: ENTRAR/SAIR */}
-        {/* ================================================================== */}
-        {/**
-         * ✅ ALTERAÇÃO CRÍTICA: Botão muda dinamicamente entre "Entrar" e "Sair"
-         * baseado no estado de autenticação do usuário
-         */}
+        {/* Botão dinâmico: Entrar/Sair */}
         <div className="p-4 border-t border-purple-700">
           {user ? (
-            // ================================================================
-            // USUÁRIO LOGADO: MOSTRA BOTÃO "SAIR"
-            // ================================================================
             <button
               onClick={handleLogout}
               className="w-full flex items-center justify-center py-2 px-4 bg-purple-700 hover:bg-purple-600 text-white rounded-lg transition-colors"
@@ -1086,15 +1001,12 @@ const handleLogout = async () => {
               Sair
             </button>
           ) : (
-            // ================================================================
-            // USUÁRIO DESLOGADO: MOSTRA BOTÃO "ENTRAR"
-            // ================================================================
             <button
               onClick={handleLoginRedirect}
               className="w-full flex items-center justify-center py-2 px-4 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors"
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l-4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
               </svg>
               Entrar
             </button>

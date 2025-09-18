@@ -13,46 +13,66 @@ import UserProfile from './UserProfile';
  * Sidebar é o menu de navegação lateral do sistema.
  * Contém: Logo, Menu de navegação, Perfil do usuário e Botão de login/logout.
  * Responsivo: Mobile (overlay) e Desktop (fixo).
- * Integra com useUserProfile para gerenciar autenticação.
+ * Integra com useUserProfile para gerenciar autenticação e visibilidade de menus.
  */
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const router = useRouter();
-  const { user, userRole, loading: loadingUser } = useUserProfile();
+  const { user, userRole, userLojas, loading: loadingUser } = useUserProfile();
   
   // ============================================================================
-  // 1. ITENS DO MENU COM RESTRIÇÃO DE ACESSO
+  // 1. DEFINIÇÃO DOS ITENS DO MENU (INDIVIDUAIS)
   // ============================================================================
   /**
-   * Itens base do menu, visíveis para todos os usuários logados.
+   * Definimos cada item separadamente para facilitar a montagem condicional.
+   * Cada item tem: path (rota), icon (emoji), label (texto).
    */
-  const baseItems = [
-    { path: '/', icon: '🏠', label: 'Home' },
-    { path: '/pedidos-pendentes', icon: '📋', label: 'Pedidos Pendentes' },
-    { path: '/pedidos-aceitos', icon: '✅', label: 'Pedidos Aceitos' },
-    { path: '/pedidos-entregues', icon: '🚚', label: 'Pedidos Entregues' },
-    { path: '/gestao-entregadores', icon: '👥', label: 'Gestão de Entregadores' },
-    { path: '/perfil', icon: '👤', label: 'Meu Perfil' },
-  ];
-
-  /**
-   * Itens administrativos, visíveis apenas para gerentes e administradores.
-   */
-  const adminItems = [
-    { path: '/todos-pedidos', icon: '📊', label: 'Todos os Pedidos' },
-    { path: '/relatorios', icon: '📈', label: 'Relatórios' },
-    { path: '/admin', icon: '⚙️', label: 'Administração' },
-  ];
-
-  /**
-   * Combina itens conforme a role do usuário.
-   */
-  const menuItems = [
-    ...baseItems,
-    ...((userRole === 'admin' || userRole === 'gerente') ? adminItems : [])
-  ];
+  const homeItem = { path: '/', icon: '🏠', label: 'Home' };
+  const perfilItem = { path: '/perfil', icon: '👤', label: 'Meu Perfil' };
+  const pendentesItem = { path: '/pedidos-pendentes', icon: '📋', label: 'Pedidos Pendentes' };
+  const aceitosItem = { path: '/pedidos-aceitos', icon: '✅', label: 'Pedidos Aceitos' };
+  const entreguesItem = { path: '/pedidos-entregues', icon: '🚚', label: 'Pedidos Entregues' };
+  const gestaoItem = { path: '/gestao-entregadores', icon: '👥', label: 'Gestão de Entregadores' };
+  const todosItem = { path: '/todos-pedidos', icon: '📊', label: 'Todos os Pedidos' };
+  const relatoriosItem = { path: '/relatorios', icon: '📈', label: 'Relatórios' };
+  const adminItem = { path: '/admin', icon: '⚙️', label: 'Administração' };
 
   // ============================================================================
-  // 2. FUNÇÃO: LOGOUT DO USUÁRIO
+  // 2. MONTAGEM CONDICIONAL DOS ITENS DO MENU
+  // ============================================================================
+  /**
+   * Constrói a lista de menuItems dinamicamente com base no user e userRole.
+   * - Sempre inclui 'Home'.
+   * - Para logados: Adiciona 'Meu Perfil'.
+   * - Para 'entregador': Adiciona itens específicos de entregas.
+   * - Para associados à loja (userLojas.length > 0) ou admin: Adiciona 'Relatórios'.
+   * - Para 'gerente' ou 'admin': Adiciona gestão e todos os pedidos.
+   * - Para 'admin': Adiciona administração.
+   * Isso segue a tabela de visibilidade fornecida.
+   */
+  let menuItems = [homeItem]; // Sempre visível (até para não logados)
+
+  if (user) { // Apenas para usuários logados
+    menuItems.push(perfilItem);
+
+    if (userRole === 'entregador') {
+      menuItems.push(pendentesItem, aceitosItem, entreguesItem);
+    }
+
+    if (userLojas.length > 0 || userRole === 'admin') {
+      menuItems.push(relatoriosItem);
+    }
+
+    if (userRole === 'gerente' || userRole === 'admin') {
+      menuItems.push(gestaoItem, todosItem);
+    }
+
+    if (userRole === 'admin') {
+      menuItems.push(adminItem);
+    }
+  }
+
+  // ============================================================================
+  // 3. FUNÇÃO: LOGOUT DO USUÁRIO
   // ============================================================================
   /**
    * Realiza o logout do usuário via Supabase.
@@ -76,7 +96,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   };
 
   // ============================================================================
-  // 3. FUNÇÃO: REDIRECIONAR PARA LOGIN
+  // 4. FUNÇÃO: REDIRECIONAR PARA LOGIN
   // ============================================================================
   /**
    * Redireciona para a página de login quando o usuário não está autenticado.
@@ -89,7 +109,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   };
 
   // ============================================================================
-  // 4. FUNÇÃO: FECHAR SIDEBAR AO CLICAR EM ITEM (MOBILE)
+  // 5. FUNÇÃO: FECHAR SIDEBAR AO CLICAR EM ITEM (MOBILE)
   // ============================================================================
   /**
    * Fecha o sidebar no mobile quando um item de menu é clicado.
@@ -101,7 +121,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   };
 
   // ============================================================================
-  // 5. RENDERIZAÇÃO DO COMPONENTE
+  // 6. RENDERIZAÇÃO DO COMPONENTE
   // ============================================================================
   return (
     <>
