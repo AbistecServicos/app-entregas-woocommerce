@@ -78,7 +78,15 @@ export const useUserProfile = () => {
           .single(),
         supabase
           .from('loja_associada')
-          .select('*')
+          .select(`
+            *,
+            semana_entregue,
+            semana_cancelado,
+            mes_entregue,
+            mes_cancelado, 
+            ano_entregue,
+            ano_cancelado
+          `) // ← CORREÇÃO AQUI: Incluir campos de estatísticas
           .eq('uid_usuario', authUser.id)
           .eq('status_vinculacao', 'ativo')
       ]);
@@ -145,6 +153,8 @@ export const useUserProfile = () => {
       console.log('loadUserData finalizado.');
     }
   };
+
+  // ... o restante do código permanece igual ...
 
   // ============================================================================
   // 3. EFFECT: CARREGAMENTO INICIAL E ESCUTA DE AUTENTICAÇÃO

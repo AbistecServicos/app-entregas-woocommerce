@@ -10,6 +10,23 @@ export default function Relatorios() {
   const [dadosRelatorios, setDadosRelatorios] = useState(null);
   const [periodo, setPeriodo] = useState('mes'); // dia, semana, mes, ano
 
+  // ============================================================================
+  // 1. MAPEAMENTO DOS NOMES CORRETOS DAS LOJAS
+  // ============================================================================
+  const mapeamentoLojas = {
+    'L1': 'Mercearia Luanda',
+    'L2': 'Brasil Carne', 
+    'L3': 'Mistos Angola',
+    'L4': '3G Luanda'
+  };
+
+  // ============================================================================
+  // 2. CORRIGIR O NOME DA LOJA COM BASE NO ID
+  // ============================================================================
+  const corrigirNomeLoja = (idLoja, nomeOriginal) => {
+    return mapeamentoLojas[idLoja] || nomeOriginal;
+  };
+
   useEffect(() => {
     if (!userLoading) {
       carregarRelatorios();
@@ -57,14 +74,20 @@ export default function Relatorios() {
 
     if (error) throw error;
 
-    const totalEntregas = data.reduce((sum, item) => sum + item[`${periodo}_entregue`], 0);
-    const totalEntregadores = new Set(data.map(item => item.uid_usuario)).size;
+    // Aplicar correção dos nomes das lojas
+    const lojasCorrigidas = data.map(loja => ({
+      ...loja,
+      loja_nome: corrigirNomeLoja(loja.id_loja, loja.loja_nome)
+    }));
+
+    const totalEntregas = lojasCorrigidas.reduce((sum, item) => sum + item[`${periodo}_entregue`], 0);
+    const totalEntregadores = new Set(lojasCorrigidas.map(item => item.uid_usuario)).size;
 
     return {
       tipo: 'admin',
       totalEntregas,
       totalEntregadores,
-      lojas: data,
+      lojas: lojasCorrigidas,
       periodo
     };
   };
@@ -74,6 +97,7 @@ export default function Relatorios() {
     if (!userLojas || userLojas.length === 0) return null;
 
     const idLoja = userLojas[0].id_loja;
+    const nomeLojaCorrigido = corrigirNomeLoja(idLoja, userLojas[0].loja_nome);
 
     const { data, error } = await supabase
       .from('loja_associada')
@@ -99,7 +123,7 @@ export default function Relatorios() {
       totalEntregas,
       totalEntregadores: data.length,
       entregadores: data,
-      loja: userLojas[0].loja_nome,
+      loja: nomeLojaCorrigido, // Usando o nome corrigido aqui
       periodo
     };
   };
@@ -120,12 +144,18 @@ export default function Relatorios() {
 
     if (error) throw error;
 
-    const totalEntregas = data.reduce((sum, item) => sum + item[`${periodo}_entregue`], 0);
+    // Aplicar correção dos nomes das lojas
+    const lojasCorrigidas = data.map(loja => ({
+      ...loja,
+      loja_nome: corrigirNomeLoja(loja.id_loja, loja.loja_nome)
+    }));
+
+    const totalEntregas = lojasCorrigidas.reduce((sum, item) => sum + item[`${periodo}_entregue`], 0);
 
     return {
       tipo: 'entregador',
       totalEntregas,
-      lojas: data,
+      lojas: lojasCorrigidas,
       periodo
     };
   };

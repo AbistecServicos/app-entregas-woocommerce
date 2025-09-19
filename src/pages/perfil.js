@@ -1,5 +1,5 @@
 // pages/perfil.js
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useUserProfile } from '../hooks/useUserProfile';
 import EditUsuarioModal from '../components/EditUsuarioModal';
@@ -14,9 +14,34 @@ export default function Perfil() {
   const [modalUsuarioOpen, setModalUsuarioOpen] = useState(false);
   const [modalLojaOpen, setModalLojaOpen] = useState(false);
   const [lojaSelecionada, setLojaSelecionada] = useState(null);
+  const [lojasAtualizadas, setLojasAtualizadas] = useState([]);
 
   // ============================================================================
-  // 1. REDIRECIONAR SE NÃO ESTIVER LOGADO
+  // 1. MAPEAMENTO DOS NOMES CORRETOS DAS LOJAS
+  // ============================================================================
+  const mapeamentoLojas = {
+    'L1': 'Mercearia Luanda',
+    'L2': 'Brasil Carne', 
+    'L3': 'Mistos Angola',
+    'L4': '3G Luanda'
+  };
+
+  // ============================================================================
+  // 2. ATUALIZAR OS NOMES DAS LOJAS COM OS VALORES CORRETOS
+  // ============================================================================
+  useEffect(() => {
+    if (userLojas && userLojas.length > 0) {
+      const lojasCorrigidas = userLojas.map(loja => ({
+        ...loja,
+        // Usa o nome correto do mapeamento, mantendo o original como fallback
+        loja_nome: mapeamentoLojas[loja.id_loja] || loja.loja_nome
+      }));
+      setLojasAtualizadas(lojasCorrigidas);
+    }
+  }, [userLojas]);
+
+  // ============================================================================
+  // 3. REDIRECIONAR SE NÃO ESTIVER LOGADO
   // ============================================================================
   if (!loading && !userProfile) {
     router.push('/login');
@@ -24,7 +49,7 @@ export default function Perfil() {
   }
 
   // ============================================================================
-  // 2. ABRIR MODAL DE EDIÇÃO DA LOJA
+  // 4. ABRIR MODAL DE EDIÇÃO DA LOJA
   // ============================================================================
   const abrirModalLoja = (loja) => {
     setLojaSelecionada(loja);
@@ -32,7 +57,7 @@ export default function Perfil() {
   };
 
   // ============================================================================
-  // 3. RENDERIZAÇÃO DA PÁGINA
+  // 5. RENDERIZAÇÃO DA PÁGINA
   // ============================================================================
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -108,11 +133,11 @@ export default function Perfil() {
           <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-xl font-semibold text-purple-800 mb-4">🏪 Lojas Associadas</h2>
             
-            {userLojas.length === 0 ? (
+            {lojasAtualizadas.length === 0 ? (
               <p className="text-gray-600 text-center py-4">Nenhuma loja associada</p>
             ) : (
               <div className="space-y-3">
-                {userLojas.map((loja) => (
+                {lojasAtualizadas.map((loja) => (
                   <div key={loja.id} className="border rounded-lg p-3 hover:bg-gray-50">
                     <h3 className="font-semibold text-gray-800">{loja.loja_nome}</h3>
                     <p className="text-sm text-gray-600">ID: {loja.id_loja}</p>
