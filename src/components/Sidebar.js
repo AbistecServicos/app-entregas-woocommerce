@@ -36,53 +36,61 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const relatoriosItem = { path: '/relatorios', icon: '📈', label: 'Relatórios' };
   const adminItem = { path: '/admin', icon: '⚙️', label: 'Administração' };
 
-// ============================================================================
-// 2. MONTAGEM CONDICIONAL DOS ITENS DO MENU
-// ============================================================================
-/**
- * Constrói a lista de menuItems dinamicamente com base no user e userRole.
- * - Sempre inclui 'Home'.
- * - Para logados: Adiciona 'Meu Perfil'.
- * - Para 'entregador', 'gerente' e 'admin': Adiciona menus de pedidos.
- * - Para associados à loja (userLojas.length > 0) ou admin: Adiciona 'Relatórios'.
- * - Para 'gerente' ou 'admin': Adiciona gestão e todos os pedidos.
- * - Para 'admin': Adiciona administração.
- * 
- * 🔧 ATUALIZAÇÃO: O item 'Pedidos Entregues' agora é visível também para gerente e admin.
- */
-let menuItems = [homeItem]; // Sempre visível (até para não logados)
+  // ============================================================================
+  // 2. MONTAGEM CONDICIONAL DOS ITENS DO MENU (CORRIGIDA)
+  // ============================================================================
+  /**
+   * Constrói a lista de menuItems dinamicamente com base no user e userRole.
+   * - Sempre inclui 'Home'.
+   * - Para logados: Adiciona 'Meu Perfil'.
+   * - Para 'entregador': Adiciona menus de pedidos pendentes e aceitos.
+   * - Para 'entregador', 'gerente' e 'admin': Adiciona pedidos entregues.
+   * - Para associados à loja (userLojas.length > 0) ou admin: Adiciona 'Relatórios'.
+   * - Para 'gerente' ou 'admin': Adiciona gestão e todos os pedidos.
+   * - Para 'admin': Adiciona administração.
+   * 
+   * ✅ CORREÇÃO: Pedidos Pendentes e Aceitos são APENAS para entregadores.
+   */
+  let menuItems = [homeItem]; // Sempre visível (até para não logados)
 
-if (user) { // Apenas para usuários logados
-  menuItems.push(perfilItem);
+  if (user) { // Apenas para usuários logados
+    menuItems.push(perfilItem);
 
-  // --------------------------------------------------------------------------
-  // BLOCO A: ITENS DE PEDIDOS (pendentes, aceitos, entregues)
-  // --------------------------------------------------------------------------
-  if (['entregador', 'gerente', 'admin'].includes(userRole)) {
-    menuItems.push(pendentesItem, aceitosItem, entreguesItem);
+    // --------------------------------------------------------------------------
+    // BLOCO A: ITENS DE PEDIDOS PENDENTES E ACEITOS (APENAS ENTREGADORES)
+    // --------------------------------------------------------------------------
+    if (userRole === 'entregador') {
+      menuItems.push(pendentesItem, aceitosItem);
+    }
+
+    // --------------------------------------------------------------------------
+    // BLOCO B: ITENS DE PEDIDOS ENTREGUES (ENTREGADORES, GERENTES E ADMIN)
+    // --------------------------------------------------------------------------
+    if (['entregador', 'gerente', 'admin'].includes(userRole)) {
+      menuItems.push(entreguesItem);
+    }
+
+    // --------------------------------------------------------------------------
+    // BLOCO C: RELATÓRIOS (para quem está vinculado a loja ou admin)
+    // --------------------------------------------------------------------------
+    if (userLojas.length > 0 || userRole === 'admin') {
+      menuItems.push(relatoriosItem);
+    }
+
+    // --------------------------------------------------------------------------
+    // BLOCO D: GESTÃO E TODOS OS PEDIDOS (GERENTE E ADMIN)
+    // --------------------------------------------------------------------------
+    if (['gerente', 'admin'].includes(userRole)) {
+      menuItems.push(gestaoItem, todosItem);
+    }
+
+    // --------------------------------------------------------------------------
+    // BLOCO E: ADMINISTRAÇÃO (APENAS ADMIN)
+    // --------------------------------------------------------------------------
+    if (userRole === 'admin') {
+      menuItems.push(adminItem);
+    }
   }
-
-  // --------------------------------------------------------------------------
-  // BLOCO B: RELATÓRIOS (para quem está vinculado a loja ou admin)
-  // --------------------------------------------------------------------------
-  if (userLojas.length > 0 || userRole === 'admin') {
-    menuItems.push(relatoriosItem);
-  }
-
-  // --------------------------------------------------------------------------
-  // BLOCO C: GESTÃO E TODOS OS PEDIDOS (gerente e admin)
-  // --------------------------------------------------------------------------
-  if (['gerente', 'admin'].includes(userRole)) {
-    menuItems.push(gestaoItem, todosItem);
-  }
-
-  // --------------------------------------------------------------------------
-  // BLOCO D: ADMINISTRAÇÃO (apenas admin)
-  // --------------------------------------------------------------------------
-  if (userRole === 'admin') {
-    menuItems.push(adminItem);
-  }
-}
 
   // ============================================================================
   // 3. FUNÇÃO: LOGOUT DO USUÁRIO
