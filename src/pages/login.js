@@ -1,5 +1,5 @@
 // pages/login.js
-import { useState, useEffect } from 'react'; // Adicionado useEffect
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -17,10 +17,6 @@ export default function Login() {
   // ============================================================================
   // 1. ESTADOS DO COMPONENTE
   // ============================================================================
-  /**
-   * Gerencia dados do formulário, estado de carregamento, erros e visibilidade.
-   * Adicionado estado para validação de formulário.
-   */
   const [email, setEmail] = useState('');              // Email do usuário
   const [password, setPassword] = useState('');        // Senha do usuário
   const [loading, setLoading] = useState(false);       // Estado de carregamento
@@ -31,24 +27,42 @@ export default function Login() {
   const router = useRouter();
 
   // ============================================================================
-  // 2. FUNÇÃO: VALIDAR FORMULÁRIO
+  // 2. EFFECT: VALIDAR FORMULÁRIO EM TEMPO REAL
   // ============================================================================
   /**
    * Valida email e senha em tempo real, atualizando o estado de validade.
    * Requisitos: Email válido e senha com no mínimo 6 caracteres.
    */
-  const validateForm = () => {
+  useEffect(() => {
     const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     const passwordValid = password.length >= 6;
     setFormValid(emailValid && passwordValid);
-  };
-
-  useEffect(() => {
-    validateForm();
   }, [email, password]);
 
   // ============================================================================
-  // 3. FUNÇÃO: LOGIN COM EMAIL/SENHA
+  // 3. FUNÇÃO: TRADUZIR ERROS TÉCNICOS PARA MENSAGENS AMIGÁVEIS
+  // ============================================================================
+  /**
+   * Converte erros técnicos do Supabase em mensagens amigáveis para o usuário
+   */
+  const translateError = (error) => {
+    if (error.message.includes('Invalid login credentials')) {
+      return 'E-mail ou senha incorretos. Verifique suas credenciais.';
+    } else if (error.message.includes('Email not confirmed')) {
+      return 'E-mail não confirmado. Verifique sua caixa de entrada.';
+    } else if (error.message.includes('User not found')) {
+      return 'Usuário não encontrado. Verifique o e-mail ou crie uma conta.';
+    } else if (error.message.includes('Network error')) {
+      return 'Erro de conexão. Verifique sua internet e tente novamente.';
+    } else if (error.message.includes('Too many requests')) {
+      return 'Muitas tentativas. Tente novamente em alguns minutos.';
+    } else {
+      return 'Erro ao fazer login. Tente novamente.';
+    }
+  };
+
+  // ============================================================================
+  // 4. FUNÇÃO: LOGIN COM EMAIL/SENHA
   // ============================================================================
   /**
    * Autentica o usuário com email/senha e redireciona com base no perfil.
@@ -66,19 +80,23 @@ export default function Login() {
     }
 
     try {
-      // 3.1. AUTENTICAÇÃO COM SUPABASE
+      // 4.1. AUTENTICAÇÃO COM SUPABASE
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-      if (authError) throw authError;
+      
+      if (authError) {
+        throw authError;
+      }
 
-      // 3.2. VERIFICAÇÃO DE PERFIL E REDIRECIONAMENTO
+      // 4.2. VERIFICAÇÃO DE PERFIL E REDIRECIONAMENTO
       const { data: usuario, error: userError } = await supabase
         .from('usuarios')
         .select('is_admin')
         .eq('uid', authData.user.id)
         .single();
+      
       if (userError) throw userError;
 
       if (usuario.is_admin) {
@@ -91,11 +109,13 @@ export default function Login() {
         .select('funcao')
         .eq('uid_usuario', authData.user.id)
         .eq('status_vinculacao', 'ativo');
+      
       if (assocError) throw new Error('Erro ao verificar permissões: ' + assocError.message);
 
       if (!associacoes || associacoes.length === 0) {
-        alert('Você não possui acesso ativo. Contate o administrador.');
-        throw new Error('Usuário sem acesso ativo. Contate o administrador.');
+        setError('Você não possui acesso ativo. Contate o administrador.');
+        await supabase.auth.signOut(); // Desconta usuário sem acesso
+        return;
       }
 
       const primeiraAssociacao = associacoes[0];
@@ -110,19 +130,17 @@ export default function Login() {
           throw new Error('Função não reconhecida.');
       }
     } catch (error) {
-      // 3.3. TRATAMENTO DE ERROS
-      setError(error.message.includes('Invalid login credentials')
-        ? 'Email ou senha inválidos.'
-        : error.message);
+      // 4.3. TRATAMENTO DE ERROS AMIGÁVEL
+      setError(translateError(error));
       console.error('Erro no login:', error);
     } finally {
-      // 3.4. FINALIZAÇÃO
+      // 4.4. FINALIZAÇÃO
       setLoading(false);
     }
   };
 
   // ============================================================================
-  // 4. FUNÇÃO: LOGIN COM GOOGLE
+  // 5. FUNÇÃO: LOGIN COM GOOGLE
   // ============================================================================
   /**
    * Inicia o fluxo de login com Google OAuth, redirecionando para completar perfil.
@@ -140,7 +158,7 @@ export default function Login() {
       });
       if (error) throw error;
     } catch (error) {
-      setError('Erro ao fazer login com Google: ' + error.message);
+      setError(translateError(error));
       console.error('Erro no login Google:', error);
     } finally {
       setLoading(false);
@@ -148,13 +166,13 @@ export default function Login() {
   };
 
   // ============================================================================
-  // 5. RENDERIZAÇÃO DO COMPONENTE
+  // 6. RENDERIZAÇÃO DO COMPONENTE
   // ============================================================================
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 via-blue-600 to-purple-800">
       <div className="max-w-md w-full mx-auto">
         
-        {/* 5.1. SEÇÃO VISUAL: LOGO E TÍTULO */}
+        {/* 6.1. SEÇÃO VISUAL: LOGO E TÍTULO */}
         <div className="text-center mb-8">
           <div
             className="w-20 h-20 bg-white rounded-full mx-auto mb-4 flex items-center justify-center"
@@ -167,23 +185,26 @@ export default function Login() {
           <p className="text-purple-200 mt-2">Sistema de Gestão de Entregas</p>
         </div>
 
-        {/* 5.2. CARD PRINCIPAL: CONTAINER DE LOGIN */}
+        {/* 6.2. CARD PRINCIPAL: CONTAINER DE LOGIN */}
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <h2 className="text-2xl font-bold text-gray-800 text-center mb-6" id="login-title">
             Acessar Sistema
           </h2>
 
-          {/* 5.2.1. EXIBIÇÃO DE ERRO */}
+          {/* 6.2.1. EXIBIÇÃO DE ERRO */}
           {error && (
             <div
-              className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4"
+              className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4 flex items-start"
               role="alert"
             >
-              {error}
+              <svg className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{error}</span>
             </div>
           )}
 
-          {/* 5.2.2. BOTÃO DE LOGIN GOOGLE */}
+          {/* 6.2.2. BOTÃO DE LOGIN GOOGLE */}
           <button
             onClick={handleGoogleLogin}
             disabled={loading}
@@ -211,7 +232,7 @@ export default function Login() {
             )}
           </button>
 
-          {/* 5.2.3. ABRE MODAL PARA LOGIN EMAIL/SENHA */}
+          {/* 6.2.3. ABRE MODAL PARA LOGIN EMAIL/SENHA */}
           <div className="mt-4 text-center">
             <button
               onClick={() => setIsModalOpen(true)}
@@ -222,34 +243,42 @@ export default function Login() {
             </button>
           </div>
 
-          {/* 5.2.4. MODAL DE LOGIN EMAIL/SENHA */}
+          {/* 6.2.4. MODAL DE LOGIN EMAIL/SENHA */}
           {isModalOpen && (
             <div
-              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
               role="dialog"
               aria-labelledby="email-login-modal-title"
               aria-modal="true"
+              onClick={() => setIsModalOpen(false)}
             >
-              <div className="bg-white rounded-2xl shadow-2xl p-6 w-96">
-                <h3
-                  id="email-login-modal-title"
-                  className="text-xl font-bold text-gray-800 mb-4"
-                >
-                  Login com Email
-                </h3>
-                {error && (
-                  <div
-                    className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4"
-                    role="alert"
+              <div 
+                className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-center mb-4">
+                  <h3
+                    id="email-login-modal-title"
+                    className="text-xl font-bold text-gray-800"
                   >
-                    {error}
-                  </div>
-                )}
+                    Login com Email
+                  </h3>
+                  <button
+                    onClick={() => setIsModalOpen(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                    aria-label="Fechar modal"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div>
                     <label
                       htmlFor="email-input"
-                      className="block text-sm font-medium text-gray-700"
+                      className="block text-sm font-medium text-gray-700 mb-1"
                     >
                       Email
                     </label>
@@ -258,16 +287,18 @@ export default function Login() {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                       required
                       disabled={loading}
                       aria-required="true"
+                      placeholder="seu@email.com"
                     />
                   </div>
+                  
                   <div className="relative">
                     <label
                       htmlFor="password-input"
-                      className="block text-sm font-medium text-gray-700"
+                      className="block text-sm font-medium text-gray-700 mb-1"
                     >
                       Senha
                     </label>
@@ -276,35 +307,36 @@ export default function Login() {
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                       required
                       disabled={loading}
                       aria-required="true"
+                      placeholder="Sua senha"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center mt-1"
+                      className="absolute right-3 top-9 text-gray-500"
                       disabled={loading}
                       aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                     >
                       {showPassword ? (
-                        <svg className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                         </svg>
                       ) : (
-                        <svg className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
                         </svg>
                       )}
                     </button>
                   </div>
+                  
                   <button
                     type="submit"
                     disabled={loading || !formValid}
                     className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    aria-label="Enviar login"
                   >
                     {loading ? (
                       <span className="flex items-center justify-center">
@@ -319,39 +351,37 @@ export default function Login() {
                     )}
                   </button>
                 </form>
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="mt-4 w-full text-gray-500 hover:text-gray-700"
-                  aria-label="Fechar modal"
-                >
-                  Fechar
-                </button>
+                
+                <div className="mt-4 text-center">
+                  <Link
+                    href="/recuperar-senha"
+                    className="text-purple-600 hover:text-purple-800 text-sm"
+                    onClick={() => setIsModalOpen(false)}
+                  >
+                    Esqueceu sua senha?
+                  </Link>
+                </div>
               </div>
             </div>
           )}
 
-          {/* 5.2.5. LINKS EXTRAS */}
+          {/* 6.2.5. LINKS EXTRAS */}
           <div className="mt-6 text-center space-y-3">
-            <Link
-              href="/cadastro"
-              className="text-purple-600 hover:text-purple-800 text-sm font-medium"
-              aria-label="Criar nova conta"
-            >
-              Criar nova conta
-            </Link>
-            <Link
-              href="/recuperar-senha"
-              className="text-gray-500 hover:text-gray-700 text-sm"
-              aria-label="Recuperar senha"
-            >
-              Esqueceu sua senha?
-            </Link>
+            <p className="text-gray-600 text-sm">
+              Não tem uma conta?{' '}
+              <Link
+                href="/cadastro"
+                className="text-purple-600 hover:text-purple-800 font-medium"
+              >
+                Criar nova conta
+              </Link>
+            </p>
           </div>
         </div>
 
-        {/* 5.3. SEÇÃO DE RODAPÉ */}
+        {/* 6.3. SEÇÃO DE RODAPÉ */}
         <div className="text-center mt-8">
-          <p className="text-purple-200 text-sm" aria-label="Copyright 2025">
+          <p className="text-purple-200 text-sm">
             © 2025 EntregasWoo - Sistema de Gestão
           </p>
         </div>
