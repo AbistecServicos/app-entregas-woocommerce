@@ -1,6 +1,6 @@
 // pages/todos-pedidos.js
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/router';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { OrderModal, WithCourier, WithoutCourier } from '../components/OrderModal';

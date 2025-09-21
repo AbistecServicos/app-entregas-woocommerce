@@ -1,6 +1,6 @@
 // components/EditUsuarioModal.js
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 
 // ==============================================================================
 // MODAL DE EDIÇÃO SIMPLIFICADA: APENAS TELEFONE E FOTO

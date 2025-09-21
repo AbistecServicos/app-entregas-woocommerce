@@ -2,7 +2,8 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { supabase } from '../lib/supabase';
+// Corrigido de '../lib/supabase' para '../../lib/supabase'
+import { supabase } from '../../lib/supabase';
 import { useUserProfile } from '../hooks/useUserProfile';
 import UserProfile from './UserProfile';
 

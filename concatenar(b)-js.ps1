@@ -1,8 +1,9 @@
-# Diretório base do projeto (agora inclui frontend inteiro, não só src)
-$baseDir = "C:\dev\app-entregas-woocommerce\frontend"
+
+# Diretório base do projeto
+$baseDir = "C:\dev\app-entregas-woocommerce\frontend\src"
 
 # Pasta onde o arquivo de saída será gerado
-$outputDir = $baseDir
+$outputDir = "C:\dev\app-entregas-woocommerce\frontend"
 
 # Arquivo de saída
 $outfile = "$outputDir\saida.txt"
@@ -13,7 +14,7 @@ Remove-Item $outfile -ErrorAction SilentlyContinue
 # Inicializa uma coleção mutável para as linhas da árvore
 $treeLines = New-Object System.Collections.ArrayList
 
-# Função para percorrer diretórios e coletar linhas da árvore
+# Função para percorrer diretórios, concatenar arquivos e coletar linhas da árvore
 function Traverse-And-Collect($dir, $indent = "", $baseDir, $parentFolder = "") {
     $items = Get-ChildItem -Path $dir -ErrorAction SilentlyContinue | Sort-Object -Property @{Expression={$_.PSIsContainer}; Descending=$true}, Name
     $fileCounter = 1
@@ -24,11 +25,7 @@ function Traverse-And-Collect($dir, $indent = "", $baseDir, $parentFolder = "") 
         $currentFolder = if ($parentFolder) { "$parentFolder/$($item.Name)" } else { $item.Name }
 
         if ($item.PSIsContainer) {
-            # Ignora node_modules e .next (não queremos na árvore)
-            if ($item.Name -in @("node_modules", ".next")) { continue }
-
             $subTree = Traverse-And-Collect $item.FullName "$indent  " $baseDir $currentFolder
-
             # Forçar subTree a ser uma ArrayList
             $subTreeArray = New-Object System.Collections.ArrayList
             if ($subTree -is [string]) {
@@ -36,23 +33,20 @@ function Traverse-And-Collect($dir, $indent = "", $baseDir, $parentFolder = "") 
             } elseif ($subTree -and $subTree.Length -gt 0) {
                 $null = $subTreeArray.AddRange($subTree)
             }
-
+            # Só adiciona a pasta se houver arquivos relevantes na subárvore
             if ($subTreeArray.Count -gt 0) {
                 $null = $localTreeLines.Add("$indent📦$currentFolder/")
                 $null = $localTreeLines.AddRange($subTreeArray)
             }
         } else {
-            # Inclui arquivos que podem ser relevantes (js, css, ico, json, txt, ps1, config, env, ignore)
-            if ($item.Name -match "\.(js|css|ico|json|txt|ps1|config.js)$" -or
-                $item.Name -match "^(\.env|\.gitignore|package\.json|package-lock\.json|vercel\.json)$") {
-
+            # Inclui arquivos .js, .css, .ico e .json
+            if ($item.Name -match "\.(js|css|ico|json)$") {
                 Add-Content $outfile "// ========================================="
                 Add-Content $outfile "// $fileCounter. $relativePath"
                 Add-Content $outfile "// ========================================="
                 Add-Content $outfile ""
                 Get-Content $item.FullName -Raw -ErrorAction SilentlyContinue | Add-Content $outfile
                 Add-Content $outfile "`n"
-
                 $null = $localTreeLines.Add("$indent$fileCounter 📜$relativePath")
                 $fileCounter++
             }
@@ -62,11 +56,10 @@ function Traverse-And-Collect($dir, $indent = "", $baseDir, $parentFolder = "") 
 }
 
 # Adiciona o root à árvore
-$null = $treeLines.Add("📦frontend/")
+$null = $treeLines.Add("📦src/")
 
 # Inicia o traversal no baseDir
 $subTree = Traverse-And-Collect $baseDir "" $baseDir
-
 # Forçar subTree a ser uma ArrayList
 $subTreeArray = New-Object System.Collections.ArrayList
 if ($subTree -is [string]) {

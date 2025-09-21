@@ -1,6 +1,6 @@
 // pages/relatorios.js
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { useUserProfile } from '../hooks/useUserProfile';
 import RouteGuard from '../components/RouteGuard';
 

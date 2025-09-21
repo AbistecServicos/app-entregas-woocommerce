@@ -1,6 +1,6 @@
 // components/EditLojaModal.js
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 
 export default function EditLojaModal({ isOpen, onClose, loja }) {
   const [loading, setLoading] = useState(false);
