@@ -1,6 +1,5 @@
 // hooks/useFirebaseNotifications.js
 import { useState, useEffect } from 'react';
-// Atualiza o import para o novo caminho em public/
 import { messaging, requestForToken, onMessageListener } from '../lib/firebase';
 import { supabase } from '../lib/supabase';
 

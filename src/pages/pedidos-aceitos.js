@@ -1,6 +1,6 @@
 // pages/pedidos-aceitos.js
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/router';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { filterPedidosPorUsuario } from '../utils/filterPedidos';
