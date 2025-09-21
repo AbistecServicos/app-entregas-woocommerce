@@ -219,12 +219,20 @@ export default function PedidosAceitos() {
                     <p className="text-sm text-gray-600 font-semibold">{pedido.loja_nome}</p>
                     <p className="text-sm"><span className="font-medium">Cliente:</span> {pedido.nome_cliente}</p>
                     <p className="text-sm"><span className="font-medium">Endereço:</span> {pedido.endereco_entrega}</p>
-                    <p className="text-sm">
-                      <span className="font-medium">Status:</span> 
-                      <span className={pedido.status_transporte === 'em rota' ? 'text-orange-600' : 'text-green-600'}>
-                        {pedido.status_transporte === 'em rota' ? ' 🚚 Em Rota' : ' ✅ Aceito'}
-                      </span>
-                    </p>
+
+{/* FRETE OFERECIDO - ADICIONADO */}
+{pedido.frete_oferecido && (
+  <p className="text-sm text-green-600 font-medium mt-1">
+    💰 Frete oferecido: R$ {parseFloat(pedido.frete_oferecido).toFixed(2)}
+  </p>
+)}
+
+<p className="text-sm">
+  <span className="font-medium">Status:</span> 
+  <span className={pedido.status_transporte === 'em rota' ? 'text-orange-600' : 'text-green-600'}>
+    {pedido.status_transporte === 'em rota' ? ' 🚚 Em Rota' : ' ✅ Aceito'}
+  </span>
+</p>
                   </div>
 
                   {/* BOTÕES DE AÇÃO */}

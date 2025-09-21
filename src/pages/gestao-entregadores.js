@@ -327,16 +327,29 @@ export default function GestaoEntregadores() {
                     </p>
                   </div>
                   
-                  <div>
-                    <p><strong>🏪 Loja:</strong> {pessoa.loja_nome} ({pessoa.id_loja})</p>
-                    <p><strong>🚗 Veículo:</strong> {formatarValor(pessoa.veiculo)}</p>
-                    {pessoa.carga_maxima > 0 && (
-                      <p><strong>📦 Carga Máx:</strong> {pessoa.carga_maxima} kg</p>
-                    )}
-                    {pessoa.perimetro_entrega && (
-                      <p><strong>📍 Perímetro:</strong> {formatarValor(pessoa.perimetro_entrega)}</p>
-                    )}
-                  </div>
+<div>
+  <p><strong>🏪 Loja:</strong> {pessoa.loja_nome} ({pessoa.id_loja})</p>
+  
+  {/* MOSTRAR CAMPOS DE ENTREGA APENAS PARA ENTREGADORES */}
+  {pessoa.funcao === 'entregador' && (
+    <>
+      <p><strong>🚗 Veículo:</strong> {formatarValor(pessoa.veiculo)}</p>
+      {pessoa.carga_maxima > 0 && (
+        <p><strong>📦 Carga Máx:</strong> {pessoa.carga_maxima} kg</p>
+      )}
+      {pessoa.perimetro_entrega && (
+        <p><strong>📍 Perímetro:</strong> {formatarValor(pessoa.perimetro_entrega)}</p>
+      )}
+    </>
+  )}
+
+  {/* MOSTRAR MENSAGEM ESPECIAL PARA GERENTES */}
+  {pessoa.funcao === 'gerente' && (
+    <p className="text-green-600 text-sm mt-1">
+      👑 Gerente da loja
+    </p>
+  )}
+</div>
                 </div>
                 
                 {pessoa.data_desligamento && (

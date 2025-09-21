@@ -181,19 +181,28 @@ export default function PedidosEntreguesEntregador({ userProfile }) {
                 </button>
                 <p className="text-sm font-semibold text-blue-800">{pedido.loja_nome}</p>
                 <div className="mt-2 text-sm">
-                  <p>
-                    <strong>Data Entrega:</strong>{' '}
-                    {pedido.data ? new Date(pedido.data).toLocaleDateString('pt-BR') : '-'}
-                  </p>
-                  <p>
-                    <strong>Status Pagamento:</strong>{' '}
-                    {pedido.status_pagamento ? '✅ Pago' : '❌ Pendente'}
-                  </p>
-                  <p>
-                    <strong>Frete:</strong> R${' '}
-                    {parseFloat(pedido.frete_pago || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
+  <p>
+    <strong>Data Entrega:</strong>{' '}
+    {pedido.data ? new Date(pedido.data).toLocaleDateString('pt-BR') : '-'}
+  </p>
+  <p>
+    <strong>Status Pagamento:</strong>{' '}
+    {pedido.status_pagamento ? '✅ Pago' : '❌ Pendente'}
+  </p>
+  
+  {/* FRETE OFERECIDO - ADICIONADO */}
+  {pedido.frete_oferecido && (
+    <p>
+      <strong>Frete Oferecido:</strong> R${' '}
+      {parseFloat(pedido.frete_oferecido).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+    </p>
+  )}
+  
+  <p>
+    <strong>Frete:</strong> R${' '}
+    {parseFloat(pedido.frete_pago || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+  </p>
+</div>
               </div>
             ))}
           </div>

@@ -131,7 +131,10 @@ export default function Perfil() {
           {/* CARD: LOJAS ASSOCIADAS */}
           {/* ================================================================== */}
           <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-xl font-semibold text-purple-800 mb-4">🏪 Lojas Associadas</h2>
+            {/* Título dinâmico baseado na função */}
+            <h2 className="text-xl font-semibold text-purple-800 mb-4">
+              {userRole === 'entregador' ? '🏪 Lojas Associadas' : '👑 Sua Gerência'}
+            </h2>
             
             {lojasAtualizadas.length === 0 ? (
               <p className="text-gray-600 text-center py-4">Nenhuma loja associada</p>
@@ -143,18 +146,32 @@ export default function Perfil() {
                     <p className="text-sm text-gray-600">ID: {loja.id_loja}</p>
                     <p className="text-sm text-purple-600">Função: {loja.funcao}</p>
                     
-                    <div className="mt-2 text-sm text-gray-700">
-                      <p>🚗 Veículo: {loja.veiculo || 'Não informado'}</p>
-                      <p>📦 Carga máxima: {loja.carga_maxima || '0'} kg</p>
-                      <p>📍 Perímetro: {loja.perimetro_entrega || 'Não definido'}</p>
-                    </div>
+                    {/* BLOCO: Mostrar campos de ENTREGADOR apenas se a função na LOJA for 'entregador' */}
+                    {loja.funcao === 'entregador' && (
+                      <div className="mt-2 text-sm text-gray-700">
+                        <p>🚗 Veículo: {loja.veiculo || 'Não informado'}</p>
+                        <p>📦 Carga máxima: {loja.carga_maxima || '0'} kg</p>
+                        <p>📍 Perímetro: {loja.perimetro_entrega || 'Não definido'}</p>
+                      </div>
+                    )}
 
-                    <button
-                      onClick={() => abrirModalLoja(loja)}
-                      className="mt-2 w-full bg-blue-600 text-white py-1 px-3 rounded text-sm hover:bg-blue-700 transition-colors"
-                    >
-                      ✏️ Editar Esta Loja
-                    </button>
+                    {/* BLOCO: Mostrar mensagem especial para GERENTES */}
+                    {loja.funcao === 'gerente' && (
+                      <div className="mt-2">
+                        <p className="text-sm text-green-600 font-medium">👑 Você é o gerente desta loja.</p>
+                        <p className="text-xs text-gray-500">Para editar dados da loja, contate um administrador.</p>
+                      </div>
+                    )}
+
+                    {/* BOTÃO: Mostrar botão de edição APENAS para lojas onde o usuário é ENTREGADOR */}
+                    {loja.funcao === 'entregador' && (
+                      <button
+                        onClick={() => abrirModalLoja(loja)}
+                        className="mt-2 w-full bg-blue-600 text-white py-1 px-3 rounded text-sm hover:bg-blue-700 transition-colors"
+                      >
+                        ✏️ Editar Dados de Entrega
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
