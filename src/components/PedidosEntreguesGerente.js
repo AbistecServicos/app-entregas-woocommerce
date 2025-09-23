@@ -7,14 +7,8 @@ import { OrderModal, WithCourier } from './OrderModal';
 import { gerarRecibosPDF } from '../utils/pdfUtils';
 
 // ============================================================================
-// COMPONENTE: PEDIDOS ENTREGUES - GERENTE
+// COMPONENTE: PEDIDOS ENTREGUES - GERENTE (VERSÃO SEGURA)
 // ============================================================================
-/**
- * Versão exclusiva para GERENTES:
- * - Filtra pedidos apenas da loja do gerente.
- * - Pode visualizar, filtrar (entregador/status), atualizar pagamentos e gerar recibos.
- * - Não vê pedidos de outras lojas.
- */
 export default function PedidosEntreguesGerente({ userProfile }) {
   // ==========================================================================
   // 1. ESTADOS DO COMPONENTE
@@ -30,7 +24,7 @@ export default function PedidosEntreguesGerente({ userProfile }) {
   const [modalAberto, setModalAberto] = useState(false);
   const [entregadores, setEntregadores] = useState([]);
   const [lojaInfo, setLojaInfo] = useState({ id_loja: null, loja_nome: null });
-  const [error, setError] = useState(null); // Novo estado para erros
+  const [error, setError] = useState(null);
 
   // ==========================================================================
   // 2. CARREGAR LOJA DO GERENTE
@@ -48,7 +42,7 @@ export default function PedidosEntreguesGerente({ userProfile }) {
           .select('id_loja, loja_nome')
           .eq('uid_usuario', userProfile.uid)
           .eq('funcao', 'gerente')
-          .single(); // Gerente tem apenas uma loja
+          .single();
 
         if (error) throw error;
         if (!data) {
@@ -93,7 +87,7 @@ export default function PedidosEntreguesGerente({ userProfile }) {
   }, [lojaInfo]);
 
   // ==========================================================================
-  // 4. CARREGAR PEDIDOS DA LOJA DO GERENTE
+  // 4. CARREGAR PEDIDOS DA LOJA DO GERENTE (COM frete_ja_processado)
   // ==========================================================================
   const carregarPedidos = async () => {
     setIsLoading(true);
@@ -107,7 +101,7 @@ export default function PedidosEntreguesGerente({ userProfile }) {
         .from('pedidos')
         .select('*')
         .eq('status_transporte', 'entregue')
-        .eq('id_loja', lojaInfo.id_loja); // Filtro essencial
+        .eq('id_loja', lojaInfo.id_loja);
 
       if (filtroEntregador) {
         query = query.ilike('aceito_por_nome', `%${filtroEntregador}%`);
@@ -140,76 +134,129 @@ export default function PedidosEntreguesGerente({ userProfile }) {
     setTotalSelecionados(total);
   }, [pedidosSelecionados, pedidos]);
 
-  // ==========================================================================
-  // 6. ATUALIZAR PAGAMENTOS DOS PEDIDOS SELECIONADOS
-  // ==========================================================================
-  const atualizarPedidos = async () => {
+// ==========================================================================
+// 6. ATUALIZAR PAGAMENTOS DOS PEDIDOS SELECIONADOS (COM DEBUG)
+// ==========================================================================
+const atualizarPedidos = async () => {
     if (pedidosSelecionados.size === 0) {
-      alert('Selecione pelo menos um pedido.');
-      return;
+        alert('Selecione pelo menos um pedido.');
+        return;
     }
     if (!dataPagamento) {
-      alert('Selecione uma data de pagamento.');
-      return;
+        alert('Selecione uma data de pagamento.');
+        return;
+    }
+
+    // ✅ DEBUG: Verificar o formato da data
+    console.log('🔍 DEBUG - Data selecionada:', {
+        dataOriginal: dataPagamento,
+        tipo: typeof dataPagamento,
+        timestamp: new Date(dataPagamento).getTime(),
+        dataISO: new Date(dataPagamento).toISOString().split('T')[0]
+    });
+
+    // Verificar se algum pedido já foi processado
+    const pedidosJaProcessados = pedidos.filter(p => 
+        pedidosSelecionados.has(p.id) && p.frete_ja_processado === true
+    );
+
+    if (pedidosJaProcessados.length > 0) {
+        alert(`⚠️ ${pedidosJaProcessados.length} pedido(s) já foram processados e não podem ser alterados.`);
+        return;
     }
 
     try {
-      const updates = Array.from(pedidosSelecionados).map(async (id) => {
-        const pedido = pedidos.find(p => p.id === id);
-        const fretePago = parseFloat(pedido?.frete_pago) || 0.0;
+        const updates = Array.from(pedidosSelecionados).map(async (id) => {
+            const pedido = pedidos.find(p => p.id === id);
+            const fretePago = parseFloat(pedido?.frete_pago) || 0.0;
 
-        const { error } = await supabase
-          .from('pedidos')
-          .update({
-            status_pagamento: fretePago > 0,
-            data_pagamento: dataPagamento,
-            frete_pago: fretePago, // Persistir frete atualizado
-          })
-          .eq('id', id);
+            // ✅ GARANTIR formato ISO
+            const dataPagamentoISO = new Date(dataPagamento).toISOString().split('T')[0];
+            
+            console.log('📤 Enviando para Supabase:', {
+                pedidoId: id,
+                fretePago: fretePago,
+                dataPagamento: dataPagamentoISO,
+                dataOriginal: dataPagamento
+            });
 
-        if (error) throw error;
-      });
+            const { error } = await supabase
+                .from('pedidos')
+                .update({
+                    status_pagamento: fretePago > 0,
+                    data_pagamento: dataPagamentoISO, // ✅ FORMATO ISO GARANTIDO
+                    frete_pago: fretePago,
+                    frete_ja_processado: true
+                })
+                .eq('id', id);
 
-      await Promise.all(updates);
-      alert('Pagamentos atualizados com sucesso!');
-      carregarPedidos(); // Recarregar para refletir mudanças
-      setPedidosSelecionados(new Set());
-      setDataPagamento('');
+            if (error) {
+                console.error('❌ Erro no update:', error);
+                throw error;
+            }
+        });
+
+        await Promise.all(updates);
+        alert('✅ Pagamentos processados com sucesso! Os valores foram somados aos totais do entregador.');
+        carregarPedidos();
+        setPedidosSelecionados(new Set());
+        setDataPagamento('');
     } catch (err) {
-      console.error('Erro ao atualizar pedidos:', err.message);
-      alert('Erro ao atualizar. Verifique o console.');
+        console.error('Erro ao atualizar pedidos:', err.message);
+        alert('❌ Erro ao processar pagamentos. Verifique o console.');
     }
-  };
+};
 
-  // ==========================================================================
-  // 7. MANIPULAR SELEÇÃO DE PEDIDOS
-  // ==========================================================================
-  const handleSelecionarPedido = (pedidoId, isChecked) => {
+// ==========================================================================
+// 7. MANIPULAR SELEÇÃO DE PEDIDOS (BLOQUEAR JA PROCESSADOS OU COM DATA)
+// ==========================================================================
+const handleSelecionarPedido = (pedidoId, isChecked) => {
+    const pedido = pedidos.find(p => p.id === pedidoId);
+    
+    // ✅ BLOQUEAR SE: Já processado OU já tem data de pagamento
+    const pedidoBloqueado = pedido?.frete_ja_processado || pedido?.data_pagamento;
+    
+    if (pedidoBloqueado) {
+        alert('⚠️ Este pedido já foi processado e não pode ser alterado.');
+        return;
+    }
+
     const newSet = new Set(pedidosSelecionados);
     if (isChecked) newSet.add(pedidoId);
     else newSet.delete(pedidoId);
     setPedidosSelecionados(newSet);
-  };
+};
 
-  // ==========================================================================
-  // 8. ATUALIZAR VALOR DO FRETE (LOCAL E BANCO)
-  // ==========================================================================
-  const handleAtualizarFrete = async (pedidoId, novoValor) => {
-    try {
-      const { error } = await supabase
-        .from('pedidos')
-        .update({ frete_pago: novoValor })
-        .eq('id', pedidoId);
-      if (error) throw error;
-
-      setPedidos(prevPedidos =>
-        prevPedidos.map(p => p.id === pedidoId ? { ...p, frete_pago: novoValor } : p)
-      );
-    } catch (err) {
-      console.error('Erro ao atualizar frete:', err.message);
-      setError('Falha ao atualizar frete.');
+// ==========================================================================
+// 8. ATUALIZAR VALOR DO FRETE (BLOQUEAR SE JÁ PROCESSADO OU COM DATA)
+// ==========================================================================
+const handleAtualizarFrete = async (pedidoId, novoValor) => {
+    const pedido = pedidos.find(p => p.id === pedidoId);
+    
+    // ✅ BLOQUEAR SE: Já processado OU já tem data de pagamento
+    const pedidoBloqueado = pedido?.frete_ja_processado || pedido?.data_pagamento;
+    
+    if (pedidoBloqueado) {
+        alert('⚠️ Este pedido já foi processado. O frete não pode ser alterado.');
+        return;
     }
-  };
+
+    try {
+        const { error } = await supabase
+            .from('pedidos')
+            .update({ frete_pago: parseFloat(novoValor) || 0 })
+            .eq('id', pedidoId);
+
+        if (error) throw error;
+
+        setPedidos(prevPedidos =>
+            prevPedidos.map(p => p.id === pedidoId ? { ...p, frete_pago: novoValor } : p)
+        );
+    } catch (err) {
+        console.error('Erro ao atualizar frete:', err.message);
+        setError('Falha ao atualizar frete.');
+    }
+};
 
   // ==========================================================================
   // 9. ABRIR MODAL DE DETALHES
@@ -222,7 +269,7 @@ export default function PedidosEntreguesGerente({ userProfile }) {
   };
 
   // ==========================================================================
-  // 10. USEEFFECTS → carregar pedidos e recalcular totais
+  // 10. USEEFFECTS
   // ==========================================================================
   useEffect(() => {
     if (lojaInfo.id_loja) carregarPedidos();
@@ -301,6 +348,7 @@ export default function PedidosEntreguesGerente({ userProfile }) {
             <option value="">Todos Status</option>
             <option value="true">Pago</option>
             <option value="false">Pendente</option>
+            <option value="processado">Processado</option>
           </select>
         </div>
 
@@ -317,10 +365,10 @@ export default function PedidosEntreguesGerente({ userProfile }) {
             className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
             disabled={isLoading}
           >
-            Atualizar
+            Processar Pagamento
           </button>
           <button
-            onClick={() => gerarRecibosPDF(pedidosSelecionados, pedidos, lojaInfo.id_loja)} // Passar id_loja para filtrar
+            onClick={() => gerarRecibosPDF(pedidosSelecionados, pedidos, lojaInfo.id_loja)}
             className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
             disabled={isLoading || pedidosSelecionados.size === 0}
           >
@@ -328,6 +376,14 @@ export default function PedidosEntreguesGerente({ userProfile }) {
           </button>
         </div>
         {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+        
+        {/* Informação sobre pedidos processados */}
+<div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
+    <p className="text-sm text-yellow-800">
+        ⚠️ Pedidos com <span className="font-semibold">data de pagamento</span> ou marcados como 
+        <span className="font-semibold"> 🔒 Processado</span> não podem ser alterados
+    </p>
+</div>
       </div>
 
       {/* Lista de Pedidos */}
@@ -343,13 +399,16 @@ export default function PedidosEntreguesGerente({ userProfile }) {
         ) : (
           <div className="grid grid-cols-1 gap-3">
             {pedidos.map(pedido => (
-              <div key={pedido.id} className="bg-white rounded-lg shadow p-3">
+              <div key={pedido.id} className={`bg-white rounded-lg shadow p-3 ${
+                pedido.frete_ja_processado ? 'border-l-4 border-green-500' : ''
+              }`}>
                 <div className="flex items-center mb-2">
                   <input
                     type="checkbox"
                     checked={pedidosSelecionados.has(pedido.id)}
                     onChange={(e) => handleSelecionarPedido(pedido.id, e.target.checked)}
                     className="h-4 w-4 text-purple-600 border-gray-300 rounded"
+                    disabled={pedido.frete_ja_processado}
                   />
                   <div className="flex-1 ml-2">
                     <button
@@ -357,6 +416,9 @@ export default function PedidosEntreguesGerente({ userProfile }) {
                       className="text-base font-bold text-purple-800 hover:underline text-left"
                     >
                       Pedido #{pedido.id_loja_woo}
+                      {pedido.frete_ja_processado && (
+                        <span className="ml-2 text-green-600 text-sm">🔒 Processado</span>
+                      )}
                     </button>
                     <p className="text-sm font-semibold text-blue-800">{pedido.loja_nome}</p>
                   </div>
@@ -370,15 +432,28 @@ export default function PedidosEntreguesGerente({ userProfile }) {
                   </p>
                   <p className="flex items-center">
                     <strong>Frete Pago: R$</strong>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={pedido.frete_pago || 0}
-                      onChange={(e) => handleAtualizarFrete(pedido.id, e.target.value)}
-                      className="w-16 p-1 border border-gray-300 rounded ml-1 focus:ring-2 focus:ring-purple-500"
-                      disabled={isLoading}
-                    />
+<input
+    type="number"
+    step="0.01"
+    min="0"
+    value={pedido.frete_pago || 0}
+    onChange={(e) => handleAtualizarFrete(pedido.id, e.target.value)}
+    className={`w-16 p-1 border rounded ml-1 focus:ring-2 ${
+        // ✅ BLOQUEAR SE: Já processado OU já tem data de pagamento
+        (pedido.frete_ja_processado || pedido.data_pagamento) 
+            ? 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed' 
+            : 'border-gray-300 focus:ring-purple-500'
+    }`}
+    disabled={pedido.frete_ja_processado || pedido.data_pagamento || isLoading}
+    title={
+        (pedido.frete_ja_processado || pedido.data_pagamento) 
+            ? 'Frete já processado - não pode ser alterado' 
+            : 'Editar valor do frete'
+    }
+/>
+                    {pedido.frete_ja_processado && (
+                      <span className="ml-2 text-xs text-gray-500">(bloqueado)</span>
+                    )}
                   </p>
                 </div>
               </div>

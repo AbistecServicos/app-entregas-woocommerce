@@ -170,10 +170,10 @@ export default function Relatorios() {
   // 8. RELATÓRIOS PARA ENTREGADOR - ATUALIZADO
   // ==========================================================================
   const carregarRelatoriosEntregador = async () => {
-    // DADOS DO DIA (HOJE) - Vem da estatisticas_diarias
+    // DADOS DO DIA (HOJE) - Vem da entregas_diarias_entregadores
     const hoje = new Date().toISOString().split('T')[0];
     const { data: dadosHoje, error: errorHoje } = await supabase
-      .from('estatisticas_diarias')
+      .from('entregas_diarias_entregadores')
       .select(`
         id_loja,
         entregues,
@@ -297,7 +297,7 @@ export default function Relatorios() {
 }
 
 // ============================================================================
-// COMPONENTE: RENDERIZAÇÃO ENTREGADOR
+// COMPONENTE: RENDERIZAÇÃO ENTREGADOR - ATUALIZADO
 // ============================================================================
 function RenderRelatoriosEntregador({ dados, periodo }) {
   if (!dados) return null;
@@ -308,7 +308,7 @@ function RenderRelatoriosEntregador({ dados, periodo }) {
       <div className="bg-blue-50 p-6 rounded-lg shadow-md mb-8">
         <h2 className="text-xl font-semibold mb-4 text-blue-800">🕒 Estatísticas de Hoje</h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div className="bg-white p-4 rounded-lg shadow-sm text-center">
             <div className="text-2xl font-bold text-blue-600 mb-1">{dados.entreguesHoje || 0}</div>
             <div className="text-sm text-gray-600">Entregas Hoje</div>
@@ -320,13 +320,6 @@ function RenderRelatoriosEntregador({ dados, periodo }) {
           </div>
           
           <div className="bg-white p-4 rounded-lg shadow-sm text-center">
-            <div className="text-2xl font-bold text-green-600 mb-1">
-              R$ {(dados.freteOferecidoHoje || 0).toFixed(2)}
-            </div>
-            <div className="text-sm text-gray-600">Frete Oferecido</div>
-          </div>
-          
-          <div className="bg-white p-4 rounded-lg shadow-sm text-center">
             <div className="text-2xl font-bold text-purple-600 mb-1">
               {new Date().toLocaleDateString('pt-BR')}
             </div>
@@ -334,19 +327,40 @@ function RenderRelatoriosEntregador({ dados, periodo }) {
           </div>
         </div>
 
-        {/* DETALHES POR LOJA (HOJE) */}
+        {/* DETALHES POR LOJA (HOJE) - FORMATO COMPACTO COM TABELA */}
         {dados.dadosHojePorLoja && dados.dadosHojePorLoja.length > 0 && (
-          <div className="mt-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Detalhes por Loja (Hoje):</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-              {dados.dadosHojePorLoja.map((item, index) => (
-                <div key={index} className="bg-white p-3 rounded border text-xs">
-                  <div className="font-medium">Loja {item.id_loja}</div>
-                  <div>Entregas: {item.entregues || 0}</div>
-                  <div>Cancel: {item.cancelados || 0}</div>
-                  <div>Frete: R$ {(item.total_frete || 0).toFixed(2)}</div>
-                </div>
-              ))}
+          <div className="mt-6">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Detalhes por Loja (Hoje):</h3>
+            
+            <div className="bg-white rounded-lg border overflow-hidden">
+              {/* CABEÇALHO DA TABELA */}
+              <div className="grid grid-cols-3 bg-gray-100 px-4 py-2 text-xs font-semibold text-gray-600 border-b">
+                <div>Loja</div>
+                <div className="text-center">ENT</div>
+                <div className="text-center">CAN</div>
+              </div>
+              
+              {/* CORPO DA TABELA COM SCROLL */}
+              <div className="max-h-40 overflow-y-auto">
+                {dados.dadosHojePorLoja.map((item, index) => {
+                  // Encontrar o nome correto da loja baseado no id_loja
+                  const nomeLoja = dados.lojas?.find(loja => loja.id_loja === item.id_loja)?.loja_nome || `Loja ${item.id_loja}`;
+                  
+                  return (
+                    <div key={index} className="grid grid-cols-3 px-4 py-2 text-xs border-b last:border-b-0 hover:bg-gray-50">
+                      <div className="truncate pr-2">
+                        {nomeLoja} ({item.id_loja})
+                      </div>
+                      <div className="text-center font-medium text-green-600">
+                        {item.entregues || 0}
+                      </div>
+                      <div className="text-center font-medium text-red-600">
+                        {item.cancelados || 0}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
