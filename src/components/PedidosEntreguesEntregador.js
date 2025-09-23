@@ -181,10 +181,10 @@ export default function PedidosEntreguesEntregador({ userProfile }) {
                 </button>
                 <p className="text-sm font-semibold text-blue-800">{pedido.loja_nome}</p>
                 <div className="mt-2 text-sm">
-  <p>
-    <strong>Data Entrega:</strong>{' '}
-    {pedido.data ? new Date(pedido.data).toLocaleDateString('pt-BR') : '-'}
-  </p>
+<p>
+  <strong>Data Entrega:</strong>{' '}
+  {pedido.ultimo_status ? new Date(pedido.ultimo_status).toLocaleDateString('pt-BR') : '-'}
+</p>
   <p>
     <strong>Status Pagamento:</strong>{' '}
     {pedido.status_pagamento ? '✅ Pago' : '❌ Pendente'}
@@ -199,7 +199,7 @@ export default function PedidosEntreguesEntregador({ userProfile }) {
   )}
   
   <p>
-    <strong>Frete:</strong> R${' '}
+    <strong>Frete Pago:</strong> R${' '}
     {parseFloat(pedido.frete_pago || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
   </p>
 </div>
