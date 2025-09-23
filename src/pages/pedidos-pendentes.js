@@ -42,27 +42,54 @@ export default function PedidosPendentes() {
     }
   };
 
-  // ============================================================================
-  // 4. FUNÇÃO: BUSCAR PEDIDOS PENDENTES
-  // ============================================================================
-  const getPedidosPendentes = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('pedidos')
-        .select('*')
-        .in('status_transporte', ['aguardando', 'revertido'])
-        .order('data', { ascending: false });
+// ============================================================================
+// 4. FUNÇÃO: BUSCAR PEDIDOS PENDENTES (CORRIGIDA)
+// ============================================================================
+const getPedidosPendentes = async () => {
+  try {
+    setLoading(true);
+    
+    // 1. Primeiro, buscar as lojas do entregador autenticado
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    const { data: lojasEntregador, error: errorLojas } = await supabase
+      .from('loja_associada')
+      .select('id_loja')
+      .eq('uid_usuario', user.id)
+      .eq('status_vinculacao', 'ativo');
 
-      if (error) throw error;
-      setPedidos(data || []);
-    } catch (error) {
-      console.error('Erro ao buscar pedidos:', error);
-      alert('Erro ao carregar pedidos.');
-    } finally {
-      setLoading(false);
+    if (errorLojas) {
+      console.error('Erro ao buscar lojas do entregador:', errorLojas);
+      return;
     }
-  };
+
+    // 2. Se não tiver lojas, não mostra nenhum pedido
+    if (!lojasEntregador || lojasEntregador.length === 0) {
+      setPedidos([]);
+      return;
+    }
+
+    // 3. Extrair apenas os IDs das lojas
+    const idsLojasEntregador = lojasEntregador.map(loja => loja.id_loja);
+
+    // 4. Buscar pedidos APENAS das lojas do entregador
+    const { data, error } = await supabase
+      .from('pedidos')
+      .select('*')
+      .in('status_transporte', ['aguardando', 'revertido'])
+      .in('id_loja', idsLojasEntregador) // ✅ FILTRO CRÍTICO AQUI
+      .order('data', { ascending: false });
+
+    if (error) throw error;
+    setPedidos(data || []);
+    
+  } catch (error) {
+    console.error('Erro ao buscar pedidos:', error);
+    alert('Erro ao carregar pedidos.');
+  } finally {
+    setLoading(false);
+  }
+};
 
 // ============================================================================
 // 5. FUNÇÃO: ACEITAR PEDIDO (CORRIGIDA - ESTRUTURA CORRETA)
