@@ -1,4 +1,4 @@
-// pages/gestao-entregadores.js (VERSÃO MELHORADA)
+// pages/gestao-entregadores.js (VERSÃO MELHORADA COM EDIÇÃO E EXCLUSÃO)
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/router';
@@ -13,6 +13,8 @@ export default function GestaoEntregadores() {
   const [buscaEmail, setBuscaEmail] = useState('');
   const [usuarioEncontrado, setUsuarioEncontrado] = useState(null);
   const [buscando, setBuscando] = useState(false);
+  const [editandoStatus, setEditandoStatus] = useState(null); // ID do registro sendo editado
+  const [novoStatus, setNovoStatus] = useState(''); // Novo status selecionado
 
   const router = useRouter();
   const { userRole, userLojas, loading: loadingUser } = useUserProfile();
@@ -179,14 +181,88 @@ export default function GestaoEntregadores() {
   };
 
   // ============================================================================
-  // 5. FUNÇÃO: FORMATAR VALOR NULO
+  // 5. EDITAR STATUS DA VINCULAÇÃO
+  // ============================================================================
+  const editarStatus = async (pessoaId) => {
+    if (!novoStatus) {
+      alert('Por favor, selecione um status');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('loja_associada')
+        .update({
+          status_vinculacao: novoStatus,
+          ultimo_status_vinculacao: new Date().toISOString(),
+          // Se for inativar, registrar data de desligamento
+          ...(novoStatus === 'inativo' && { data_desligamento: new Date().toISOString() }),
+          // Se for reativar, limpar data de desligamento
+          ...(novoStatus === 'ativo' && { data_desligamento: null })
+        })
+        .eq('id', pessoaId);
+
+      if (error) throw error;
+
+      alert('✅ Status atualizado com sucesso!');
+      setEditandoStatus(null);
+      setNovoStatus('');
+      carregarEntregadores();
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error);
+      alert('❌ Erro ao atualizar status');
+    }
+  };
+
+  // ============================================================================
+  // 6. EXCLUIR ASSOCIAÇÃO DA LOJA
+  // ============================================================================
+  const excluirAssociacao = async (pessoa) => {
+    if (!confirm(`Tem certeza que deseja excluir a associação de ${pessoa.nome_completo} com a loja ${pessoa.loja_nome}?\n\nEsta ação não exclui o usuário do sistema, apenas remove o vínculo com esta loja.`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('loja_associada')
+        .delete()
+        .eq('id', pessoa.id);
+
+      if (error) throw error;
+
+      alert('✅ Associação excluída com sucesso! O usuário agora está sem vínculo com esta loja.');
+      carregarEntregadores();
+    } catch (error) {
+      console.error('Erro ao excluir associação:', error);
+      alert('❌ Erro ao excluir associação');
+    }
+  };
+
+  // ============================================================================
+  // 7. INICIAR EDIÇÃO DE STATUS
+  // ============================================================================
+  const iniciarEdicaoStatus = (pessoa) => {
+    setEditandoStatus(pessoa.id);
+    setNovoStatus(pessoa.status_vinculacao);
+  };
+
+  // ============================================================================
+  // 8. CANCELAR EDIÇÃO DE STATUS
+  // ============================================================================
+  const cancelarEdicaoStatus = () => {
+    setEditandoStatus(null);
+    setNovoStatus('');
+  };
+
+  // ============================================================================
+  // 9. FUNÇÃO: FORMATAR VALOR NULO
   // ============================================================================
   const formatarValor = (valor) => {
     return valor || 'Não informado';
   };
 
   // ============================================================================
-  // 6. RENDERIZAÇÃO DA PÁGINA
+  // 10. RENDERIZAÇÃO DA PÁGINA
   // ============================================================================
   if (loadingUser) {
     return <div className="min-h-screen flex items-center justify-center">Carregando perfil...</div>;
@@ -289,7 +365,7 @@ export default function GestaoEntregadores() {
         )}
       </div>
 
-      {/* LISTA DE PESSOAS DA LOJA - COM MAIS DETALHES */}
+      {/* LISTA DE PESSOAS DA LOJA - COM CONTROLES DE STATUS E EXCLUSÃO */}
       <div className="bg-white p-6 rounded-lg shadow">
         <h2 className="text-lg font-semibold mb-4">
           {userRole === 'gerente' ? '👥 Pessoas da Minha Loja' : '👥 Pessoas do Sistema'}
@@ -302,7 +378,7 @@ export default function GestaoEntregadores() {
         ) : (
           <div className="grid gap-4">
             {entregadores.map((pessoa) => (
-              <div key={pessoa.id} className="border p-4 rounded-lg bg-gray-50">
+              <div key={pessoa.id} className="border p-4 rounded-lg bg-gray-50 relative">
                 <h3 className="font-semibold text-lg text-purple-800">
                   {pessoa.funcao === 'gerente' ? '👑 ' : '🚚 '}
                   {pessoa.nome_completo}
@@ -318,38 +394,75 @@ export default function GestaoEntregadores() {
                         {pessoa.funcao}
                       </span>
                     </p>
-                    <p><strong>📊 Status:</strong> 
-                      <span className={`ml-1 ${
-                        pessoa.status_vinculacao === 'ativo' ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {pessoa.status_vinculacao}
-                      </span>
-                    </p>
+                    
+                    {/* CAMPO STATUS EDITÁVEL */}
+                    <div className="flex items-center gap-2">
+                      <strong>📊 Status:</strong>
+                      {editandoStatus === pessoa.id ? (
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={novoStatus}
+                            onChange={(e) => setNovoStatus(e.target.value)}
+                            className="border rounded p-1"
+                          >
+                            <option value="ativo">Ativo</option>
+                            <option value="inativo">Inativo</option>
+                          </select>
+                          <button
+                            onClick={() => editarStatus(pessoa.id)}
+                            className="bg-green-500 text-white px-2 py-1 rounded text-sm hover:bg-green-600"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={cancelarEdicaoStatus}
+                            className="bg-gray-500 text-white px-2 py-1 rounded text-sm hover:bg-gray-600"
+                          >
+                            ✗
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className={`ml-1 ${
+                            pessoa.status_vinculacao === 'ativo' ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {pessoa.status_vinculacao}
+                          </span>
+                          <button
+                            onClick={() => iniciarEdicaoStatus(pessoa)}
+                            className="text-blue-500 hover:text-blue-700 text-sm"
+                            title="Editar status"
+                          >
+                            ✏️
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   
-<div>
-  <p><strong>🏪 Loja:</strong> {pessoa.loja_nome} ({pessoa.id_loja})</p>
-  
-  {/* MOSTRAR CAMPOS DE ENTREGA APENAS PARA ENTREGADORES */}
-  {pessoa.funcao === 'entregador' && (
-    <>
-      <p><strong>🚗 Veículo:</strong> {formatarValor(pessoa.veiculo)}</p>
-      {pessoa.carga_maxima > 0 && (
-        <p><strong>📦 Carga Máx:</strong> {pessoa.carga_maxima} kg</p>
-      )}
-      {pessoa.perimetro_entrega && (
-        <p><strong>📍 Perímetro:</strong> {formatarValor(pessoa.perimetro_entrega)}</p>
-      )}
-    </>
-  )}
+                  <div>
+                    <p><strong>🏪 Loja:</strong> {pessoa.loja_nome} ({pessoa.id_loja})</p>
+                    
+                    {/* MOSTRAR CAMPOS DE ENTREGA APENAS PARA ENTREGADORES */}
+                    {pessoa.funcao === 'entregador' && (
+                      <>
+                        <p><strong>🚗 Veículo:</strong> {formatarValor(pessoa.veiculo)}</p>
+                        {pessoa.carga_maxima > 0 && (
+                          <p><strong>📦 Carga Máx:</strong> {pessoa.carga_maxima} kg</p>
+                        )}
+                        {pessoa.perimetro_entrega && (
+                          <p><strong>📍 Perímetro:</strong> {formatarValor(pessoa.perimetro_entrega)}</p>
+                        )}
+                      </>
+                    )}
 
-  {/* MOSTRAR MENSAGEM ESPECIAL PARA GERENTES */}
-  {pessoa.funcao === 'gerente' && (
-    <p className="text-green-600 text-sm mt-1">
-      👑 Gerente da loja
-    </p>
-  )}
-</div>
+                    {/* MOSTRAR MENSAGEM ESPECIAL PARA GERENTES */}
+                    {pessoa.funcao === 'gerente' && (
+                      <p className="text-green-600 text-sm mt-1">
+                        👑 Gerente da loja
+                      </p>
+                    )}
+                  </div>
                 </div>
                 
                 {pessoa.data_desligamento && (
@@ -357,6 +470,20 @@ export default function GestaoEntregadores() {
                     <strong>🗓️ Data desligamento:</strong> {new Date(pessoa.data_desligamento).toLocaleDateString('pt-BR')}
                   </p>
                 )}
+                
+                {/* BOTÃO EXCLUIR ASSOCIAÇÃO */}
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <button
+                    onClick={() => excluirAssociacao(pessoa)}
+                    className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
+                    title="Excluir associação com a loja"
+                  >
+                    🗑️ Excluir Associação
+                  </button>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Remove o vínculo com esta loja, mas mantém o usuário no sistema
+                  </p>
+                </div>
               </div>
             ))}
           </div>
