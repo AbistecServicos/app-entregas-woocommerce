@@ -29,148 +29,122 @@ export const useUserProfile = () => {
   const [updating, setUpdating] = useState(false); // Estado de atualização
   const [isInitialized, setIsInitialized] = useState(false); // Novo estado para verificar inicialização do Supabase
 
-  // ============================================================================
-  // 3. FUNÇÃO AUXILIAR: ESPERAR INICIALIZAÇÃO DO SUPABASE
-  // ============================================================================
-  /**
-   * Aguarda até que o Supabase esteja inicializado e a sessão esteja carregada
-   */
-  const waitForSupabase = async () => {
-    try {
-      console.log('⏳ Aguardando inicialização do Supabase...');
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        console.log('⚠️ Nenhuma sessão encontrada na inicialização');
-        return null;
-      }
-      console.log('✅ Sessão inicial carregada');
-      return session.user;
-    } catch (error) {
-      console.error('❌ Erro ao verificar sessão inicial:', error);
-      return null;
-    }
-  };
+// ============================================================================
+// 3. FUNÇÃO AUXILIAR: ESPERAR INICIALIZAÇÃO DO SUPABASE (REMOVER/MARCAR COMO OBSOLETA)
+// ============================================================================
+/**
+ * ⚠️ OBSOLETA - O Supabase já está inicializado quando o hook é chamado
+ * Mantida apenas para referência, mas não é mais utilizada
+ */
+// const waitForSupabase = async () => {
+//   // ... código comentado ou removido
+// };
 
-  // ============================================================================
-  // 4. FUNÇÃO PRINCIPAL: CARREGAR DADOS DO USUÁRIO
-  // ============================================================================
-  /**
-   * Carrega todos os dados do usuário de forma sequencial e determinística
-   * Segue a hierarquia de permissões do sistema
-   */
-  const loadUserData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      console.log('🔄 Iniciando carregamento de dados do usuário...');
+// ============================================================================
+// 4. FUNÇÃO PRINCIPAL: CARREGAR DADOS DO USUÁRIO (CORRIGIDA)
+// ============================================================================
+const loadUserData = async () => {
+  try {
+    setLoading(true);
+    setError(null);
+    console.log('🔄 Iniciando carregamento de dados do usuário...');
 
-      // 4.1. VERIFICAR INICIALIZAÇÃO DO SUPABASE
-      if (!isInitialized) {
-        console.log('⏳ Supabase ainda não inicializado, aguardando...');
-        const initialUser = await waitForSupabase();
-        if (!initialUser) {
-          console.log('👤 Nenhum usuário autenticado na inicialização');
-          resetToVisitor();
-          return;
-        }
-        setUser(initialUser);
-        setIsInitialized(true);
-      }
-
-      // 4.2. OBTER USUÁRIO AUTENTICADO
-      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-      
-      if (authError) {
-        console.error('❌ Erro de autenticação:', authError);
-        setError('Falha na autenticação: ' + authError.message);
-        resetToVisitor();
-        return;
-      }
-
-      if (!authUser) {
-        console.log('👤 Nenhum usuário autenticado');
-        resetToVisitor();
-        return;
-      }
-
-      setUser(authUser);
-      console.log('✅ Usuário autenticado:', authUser.email);
-
-      // 4.3. BUSCAR PERFIL NA TABELA 'usuarios'
-      const { data: usuarioData, error: usuarioError } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('uid', authUser.id)
-        .single();
-
-      if (usuarioError) {
-        console.error('❌ Erro ao buscar perfil:', usuarioError);
-        setError('Perfil não encontrado: ' + usuarioError.message);
-        resetToVisitor();
-        return;
-      }
-
-      setUserProfile(usuarioData);
-      console.log('✅ Perfil carregado:', usuarioData.nome_completo);
-
-      // 4.4. VERIFICAÇÃO CRÍTICA: É ADMINISTRADOR?
-      if (usuarioData.is_admin === true) {
-        console.log('🎯 Usuário é ADMINISTRADOR (is_admin = true)');
-        setUserRole('admin');
-        setUserLojas([]); // Admin não precisa de lojas associadas
-        setLoading(false);
-        return;
-      }
-
-      // 4.5. BUSCAR LOJAS ASSOCIADAS NA TABELA 'loja_associada'
-      const { data: lojasData, error: lojasError } = await supabase
-        .from('loja_associada')
-        .select('*')
-        .eq('uid_usuario', authUser.id)
-        .eq('status_vinculacao', 'ativo');
-
-      if (lojasError) {
-        console.warn('⚠️ Erro ao buscar lojas associadas:', lojasError);
-        setUserLojas([]);
-        setUserRole('visitante');
-        setLoading(false);
-        return;
-      }
-
-      setUserLojas(lojasData || []);
-      console.log('📊 Lojas associadas encontradas:', lojasData?.length || 0);
-
-      // 4.6. DETERMINAR FUNÇÃO BASEADA NAS LOJAS ASSOCIADAS
-      if (!lojasData || lojasData.length === 0) {
-        console.log('👤 Usuário é VISITANTE (sem lojas associadas)');
-        setUserRole('visitante');
-      } else {
-        const lojasComoGerente = lojasData.filter(loja => loja.funcao === 'gerente');
-        
-        if (lojasComoGerente.length > 0) {
-          if (lojasComoGerente.length > 1) {
-            console.error('❌ CONFLITO: Usuário é gerente em múltiplas lojas');
-            setError('Configuração inválida: Gerente em múltiplas lojas');
-            setUserRole('erro');
-          } else {
-            console.log('💼 Usuário é GERENTE da loja:', lojasComoGerente[0].id_loja);
-            setUserRole('gerente');
-          }
-        } else {
-          console.log('🚚 Usuário é ENTREGADOR em', lojasData.length, 'loja(s)');
-          setUserRole('entregador');
-        }
-      }
-
-    } catch (error) {
-      console.error('💥 Erro inesperado no carregamento:', error);
-      setError('Erro inesperado: ' + error.message);
+    // 4.1. ✅ CORREÇÃO: VERIFICAÇÃO SIMPLIFICADA SEM LOOP
+    // Obter usuário autenticado diretamente
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) {
+      console.error('❌ Erro de autenticação:', authError);
+      setError('Falha na autenticação: ' + authError.message);
       resetToVisitor();
-    } finally {
-      setLoading(false);
-      console.log('✅ Carregamento finalizado. Função:', userRole);
+      return;
     }
-  };
+
+    if (!authUser) {
+      console.log('👤 Nenhum usuário autenticado');
+      resetToVisitor();
+      return;
+    }
+
+    setUser(authUser);
+    console.log('✅ Usuário autenticado:', authUser.email);
+
+    // ✅ RESTANTE DO CÓDIGO PERMANECE IGUAL (blocos 4.2 a 4.6)
+    // 4.2. BUSCAR PERFIL NA TABELA 'usuarios'
+    const { data: usuarioData, error: usuarioError } = await supabase
+      .from('usuarios')
+      .select('*')
+      .eq('uid', authUser.id)
+      .single();
+
+    if (usuarioError) {
+      console.error('❌ Erro ao buscar perfil:', usuarioError);
+      setError('Perfil não encontrado: ' + usuarioError.message);
+      resetToVisitor();
+      return;
+    }
+
+    setUserProfile(usuarioData);
+    console.log('✅ Perfil carregado:', usuarioData.nome_completo);
+
+    // 4.3. VERIFICAÇÃO CRÍTICA: É ADMINISTRADOR?
+    if (usuarioData.is_admin === true) {
+      console.log('🎯 Usuário é ADMINISTRADOR (is_admin = true)');
+      setUserRole('admin');
+      setUserLojas([]);
+      setLoading(false);
+      return;
+    }
+
+    // 4.4. BUSCAR LOJAS ASSOCIADAS
+    const { data: lojasData, error: lojasError } = await supabase
+      .from('loja_associada')
+      .select('*')
+      .eq('uid_usuario', authUser.id)
+      .eq('status_vinculacao', 'ativo');
+
+    if (lojasError) {
+      console.warn('⚠️ Erro ao buscar lojas associadas:', lojasError);
+      setUserLojas([]);
+      setUserRole('visitante');
+      setLoading(false);
+      return;
+    }
+
+    setUserLojas(lojasData || []);
+    console.log('📊 Lojas associadas encontradas:', lojasData?.length || 0);
+
+    // 4.5. DETERMINAR FUNÇÃO BASEADA NAS LOJAS ASSOCIADAS
+    if (!lojasData || lojasData.length === 0) {
+      console.log('👤 Usuário é VISITANTE (sem lojas associadas)');
+      setUserRole('visitante');
+    } else {
+      const lojasComoGerente = lojasData.filter(loja => loja.funcao === 'gerente');
+      
+      if (lojasComoGerente.length > 0) {
+        if (lojasComoGerente.length > 1) {
+          console.error('❌ CONFLITO: Usuário é gerente em múltiplas lojas');
+          setError('Configuração inválida: Gerente em múltiplas lojas');
+          setUserRole('erro');
+        } else {
+          console.log('💼 Usuário é GERENTE da loja:', lojasComoGerente[0].id_loja);
+          setUserRole('gerente');
+        }
+      } else {
+        console.log('🚚 Usuário é ENTREGADOR em', lojasData.length, 'loja(s)');
+        setUserRole('entregador');
+      }
+    }
+
+  } catch (error) {
+    console.error('💥 Erro inesperado no carregamento:', error);
+    setError('Erro inesperado: ' + error.message);
+    resetToVisitor();
+  } finally {
+    setLoading(false);
+    console.log('✅ Carregamento finalizado. Função:', userRole);
+  }
+};
 
   // ============================================================================
   // 5. FUNÇÃO AUXILIAR: RESETAR PARA VISITANTE
@@ -187,53 +161,62 @@ export const useUserProfile = () => {
     setLoading(false);
   };
 
-  // ============================================================================
-  // 6. EFFECT: INICIALIZAÇÃO E OBSERVADOR DE AUTENTICAÇÃO
-  // ============================================================================
-  /**
-   * Executa o carregamento inicial e fica observando mudanças de autenticação
-   * Atualiza automaticamente quando usuário faz login/logout
-   */
-  useEffect(() => {
-    // Carregamento inicial com verificação de sessão
-    const initialize = async () => {
-      const initialUser = await waitForSupabase();
-      if (initialUser) {
-        setUser(initialUser);
-        setIsInitialized(true);
+// ============================================================================
+// 6. EFFECT: INICIALIZAÇÃO SEM OBSERVADOR (SOLUÇÃO DEFINITIVA)
+// ============================================================================
+useEffect(() => {
+  let isMounted = true;
+  let hasInitialized = false;
+
+  const initializeAuth = async () => {
+    if (hasInitialized) return; // ⚠️ IMPEDE EXECUÇÃO DUPLICADA
+    hasInitialized = true;
+    
+    try {
+      console.log('🔐 Iniciando verificação de autenticação...');
+      
+      // ✅ VERIFICAÇÃO DIRETA SEM OBSERVADOR
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (!isMounted) return;
+
+      if (error) {
+        console.error('❌ Erro ao verificar sessão:', error);
+        resetToVisitor();
+        return;
+      }
+
+      if (session?.user) {
+        console.log('✅ Usuário logado:', session.user.email);
+        setUser(session.user);
         await loadUserData();
       } else {
+        console.log('👤 Nenhum usuário autenticado');
         resetToVisitor();
+      }
+    } catch (error) {
+      console.error('💥 Erro inesperado:', error);
+      resetToVisitor();
+    } finally {
+      if (isMounted) {
         setIsInitialized(true);
+        console.log('✅ Inicialização concluída');
       }
-    };
+    }
+  };
 
-    initialize();
+  // ✅ EXECUTA APENAS UMA VEZ
+  initializeAuth();
 
-    // Observar mudanças de estado de autenticação
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('🔐 Evento de autenticação:', event);
-        
-        if (event === 'SIGNED_IN' && session?.user) {
-          console.log('✅ Usuário logado:', session.user.email);
-          setUser(session.user);
-          await loadUserData();
-        } else if (event === 'SIGNED_OUT') {
-          console.log('👋 Usuário desconectado');
-          resetToVisitor();
-        }
-      }
-    );
+  // ⚠️ CORREÇÃO CRÍTICA: REMOVE COMPLETAMENTE O OBSERVADOR
+  // O Supabase já gerencia a sessão automaticamente
+  // Não precisamos escutar eventos que causam loops
 
-    // Cleanup: Remover observador quando componente desmontar
-    return () => {
-      if (authListener?.subscription) {
-        authListener.subscription.unsubscribe();
-        console.log('🧹 Observador de autenticação removido');
-      }
-    };
-  }, []);
+  return () => {
+    isMounted = false;
+    console.log('🧹 Cleanup do effect de autenticação');
+  };
+}, []); // ✅ Array de dependências VAZIO - executa UMA vez
 
   // ============================================================================
   // 7. FUNÇÃO: ATUALIZAR PERFIL DO USUÁRIO
@@ -296,7 +279,50 @@ export const useUserProfile = () => {
   // ============================================================================
   /**
    * Expõe estados e funções para componentes consumidores
-   */
+   * 
+// ============================================================================
+// 10. EFFECT: CONTROLE DE VISIBILIDADE DA JANELA (REMOVER/COMENTAR)
+// ============================================================================
+// COMENTE TODO ESTE BLOCO - ELE ESTÁ CAUSANDO CONFLITO
+/*
+useEffect(() => {
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      console.log('🔄 Janela voltou ao foco - verificando sessão rapidamente...');
+      
+      if (user && !loading) {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session?.user?.id !== user?.id) {
+            console.log('🔐 Sessão mudou - recarregando dados');
+            loadUserData();
+          } else {
+            console.log('✅ Sessão mantida - sem necessidade de recarregar');
+          }
+        });
+      }
+    }
+  };
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  
+  return () => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+  };
+}, [user, loading]);
+*/
+   
+// ============================================================================
+// 11. EFFECT: DEBUG - MONITORAR MUDANÇAS DE ESTADO (TEMPORÁRIO)
+// ============================================================================
+useEffect(() => {
+  console.log('🔍 DEBUG - Estado atualizado:', {
+    user: user?.email,
+    userRole,
+    loading,
+    isInitialized
+  });
+}, [user, userRole, loading, isInitialized]);
+
   return {
     user,
     userProfile,
@@ -309,3 +335,4 @@ export const useUserProfile = () => {
     reloadUserData
   };
 };
+

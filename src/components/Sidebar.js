@@ -18,7 +18,7 @@ import UserProfile from './UserProfile';
  */
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const router = useRouter();
-  const { user, userRole, userLojas, loading: loadingUser } = useUserProfile();
+ const { user, userProfile, userRole, userLojas, loading: loadingUser, error } = useUserProfile();
   
   // ============================================================================
   // 1. DEFINIÇÃO DOS ITENS DO MENU (INDIVIDUAIS)
@@ -195,7 +195,12 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         {/* Perfil do usuário (condicional) */}
         {user && (
           <div className="p-4 border-t border-purple-700 bg-purple-900">
-            <UserProfile />
+            <UserProfile 
+  userProfile={userProfile} 
+  userRole={userRole} 
+  loading={loadingUser}
+  error={error}
+/>
           </div>
         )}
 
