@@ -2,20 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Estilos globais para WooCommerce */
+/* ==============================================================================
+   VARIÁVEIS DE CORES E ESTILOS GLOBAIS
+   ============================================================================== */
 :root {
   --woo-purple: #7f54b3;
   --woo-purple-dark: #6b3fa0;
   --woo-purple-light: #f0e6ff;
+  
+  /* Novas cores para o sistema de notificações */
+  --notification-red: #ef4444;
+  --notification-green: #10b981;
+  --notification-blue: #3b82f6;
+  --notification-yellow: #f59e0b;
 }
 
+/* ==============================================================================
+   ESTILOS GERAIS DO BODY
+   ============================================================================== */
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   margin: 0;
   padding: 0;
 }
 
-/* Cabeçalho fixo */
+/* ==============================================================================
+   CABEÇALHO FIXO
+   ============================================================================== */
 .sticky-header {
   position: sticky;
   top: 0;
@@ -23,4 +36,354 @@ body {
   background: white;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   border-bottom: 2px solid #e9d5ff;
+}
+
+/* ==============================================================================
+   SISTEMA DE NOTIFICAÇÕES PUSH
+   ============================================================================== */
+
+/* ------------------------------------------------------------------------------
+   ANIMAÇÕES PARA NOTIFICAÇÕES
+   ------------------------------------------------------------------------------ */
+
+/**
+ * Animação de fade-in para toast de notificações
+ * Usada quando uma nova notificação aparece na tela
+ */
+@keyframes notification-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/**
+ * Animação de pulse para badge de notificações
+ * Chama atenção quando há novas notificações não lidas
+ */
+@keyframes notification-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+/**
+ * Animação de shake para notificações importantes
+ * Usada para notificações críticas ou urgentes
+ */
+@keyframes notification-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+/* ------------------------------------------------------------------------------
+   CLASSES DE ANIMAÇÃO
+   ------------------------------------------------------------------------------ */
+.animate-notification-fade-in {
+  animation: notification-fade-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-notification-pulse {
+  animation: notification-pulse 2s infinite;
+}
+
+.animate-notification-shake {
+  animation: notification-shake 0.5s ease-in-out;
+}
+
+/* ------------------------------------------------------------------------------
+   ESTILOS DO TOAST DE NOTIFICAÇÃO
+   ------------------------------------------------------------------------------ */
+
+/**
+ * Container principal do toast de notificação
+ * Aparece no canto superior direito da tela
+ */
+.notification-toast {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 100;
+  max-width: 24rem;
+  width: 90%;
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+/**
+ * Efeito de hover no toast para interatividade
+ */
+.notification-toast:hover {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  transform: translateY(-1px);
+  transition: all 0.2s ease-in-out;
+}
+
+/* ------------------------------------------------------------------------------
+   BADGE DE NOTIFICAÇÕES NO HEADER
+   ------------------------------------------------------------------------------ */
+
+/**
+ * Badge que aparece sobre o ícone de notificações
+ * Mostra o número de notificações não lidas
+ */
+.notification-badge {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  background-color: var(--notification-red);
+  color: white;
+  border-radius: 9999px;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/**
+ * Estados diferentes para o badge baseado na quantidade
+ */
+.notification-badge--many {
+  background-color: var(--notification-yellow);
+  animation: notification-pulse 1s infinite, notification-shake 0.5s ease-in-out;
+}
+
+.notification-badge--critical {
+  background-color: var(--notification-red);
+  animation: notification-pulse 0.5s infinite;
+}
+
+/* ------------------------------------------------------------------------------
+   BOTÃO DE NOTIFICAÇÕES NO HEADER
+   ------------------------------------------------------------------------------ */
+
+/**
+ * Estilo base do botão de notificações
+ */
+.notification-button {
+  position: relative;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  color: #6b7280;
+  transition: all 0.2s ease-in-out;
+}
+
+/**
+ * Estados de hover e focus para acessibilidade
+ */
+.notification-button:hover {
+  color: #374151;
+  background-color: #f9fafb;
+  transform: translateY(-1px);
+}
+
+.notification-button:focus {
+  outline: 2px solid var(--woo-purple-light);
+  outline-offset: 2px;
+}
+
+/**
+ * Efeito especial quando há notificações não lidas
+ */
+.notification-button--has-notifications {
+  color: var(--woo-purple);
+}
+
+/* ------------------------------------------------------------------------------
+   LISTA DE NOTIFICAÇÕES (FUTURO - MODAL/DROPDOWN)
+   ------------------------------------------------------------------------------ */
+
+/**
+ * Container da lista de notificações (para implementação futura)
+ */
+.notification-list {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.5rem;
+  width: 20rem;
+  max-height: 24rem;
+  overflow-y: auto;
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e5e7eb;
+  z-index: 50;
+}
+
+/**
+ * Item individual da lista de notificações
+ */
+.notification-item {
+  padding: 1rem;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.notification-item:hover {
+  background-color: #f9fafb;
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+.notification-item--unread {
+  background-color: var(--woo-purple-light);
+  border-left: 4px solid var(--woo-purple);
+}
+
+/* ------------------------------------------------------------------------------
+   ESTADOS DO SISTEMA DE NOTIFICAÇÕES
+   ------------------------------------------------------------------------------ */
+
+/**
+ * Indicadores visuais para diferentes estados do sistema
+ */
+.notification-status--connected {
+  color: var(--notification-green);
+}
+
+.notification-status--disconnected {
+  color: var(--notification-red);
+}
+
+.notification-status--loading {
+  color: var(--notification-yellow);
+}
+
+/* ------------------------------------------------------------------------------
+   RESPONSIVIDADE
+   ------------------------------------------------------------------------------ */
+
+/**
+ * Ajustes para dispositivos móveis
+ */
+@media (max-width: 768px) {
+  .notification-toast {
+    right: 0.5rem;
+    left: 0.5rem;
+    max-width: none;
+    width: auto;
+  }
+  
+  .notification-list {
+    width: 100vw;
+    right: -1rem;
+    border-radius: 0;
+  }
+  
+  .notification-badge {
+    min-width: 1.125rem;
+    height: 1.125rem;
+    font-size: 0.625rem;
+  }
+}
+
+/* ------------------------------------------------------------------------------
+   UTILITÁRIOS PARA O SISTEMA DE NOTIFICAÇÕES
+   ------------------------------------------------------------------------------ */
+
+/**
+ * Classe para esconder notificações de forma animada
+ */
+.notification-hide {
+  opacity: 0;
+  transform: translateX(100%);
+  transition: all 0.3s ease-in-out;
+}
+
+/**
+ * Classe para destacar notificações importantes
+ */
+.notification-priority {
+  border-left: 4px solid var(--notification-red);
+  background: linear-gradient(90deg, #fef2f2 0%, white 100%);
+}
+
+/**
+ * Skeleton loading para notificações carregando
+ */
+.notification-skeleton {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ==============================================================================
+   COMPONENTES TAILWIND PERSONALIZADOS
+   ============================================================================== */
+@layer components {
+  /* Botão com estilo WooCommerce para notificações */
+  .btn-notification {
+    @apply bg-[var(--woo-purple)] text-white px-4 py-2 rounded-lg hover:bg-[var(--woo-purple-dark)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--woo-purple)] focus:ring-offset-2;
+  }
+  
+  /* Badge de status para notificações */
+  .badge-notification {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .badge-notification--success {
+    @apply bg-green-100 text-green-800;
+  }
+  
+  .badge-notification--warning {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+  
+  .badge-notification--error {
+    @apply bg-red-100 text-red-800;
+  }
+}
+
+/* ==============================================================================
+   ACESSIBILIDADE
+   ============================================================================== */
+
+/**
+ * Melhorias de acessibilidade para usuários de leitores de tela
+ */
+.notification-announce {
+  position: absolute;
+  left: -10000px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/**
+ * Foco visível para navegação por teclado
+ */
+.notification-button:focus-visible {
+  outline: 2px solid var(--woo-purple);
+  outline-offset: 2px;
+  border-radius: 0.375rem;
 }
