@@ -111,14 +111,18 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         flex flex-col h-full
       `}>
         {/* Logo / Marca do sistema */}
-        <div className="p-6 border-b border-purple-700">
-          <Link href="/" passHref onClick={handleMenuItemClick}>
-            <div className="cursor-pointer">
-              <h1 className="text-2xl font-bold">EntregasWoo</h1>
-              <p className="text-purple-300 text-sm">Sistema de Gestão</p>
-            </div>
-          </Link>
-        </div>
+<div className="p-4 border-b border-purple-700">
+  <Link href="/" passHref onClick={handleMenuItemClick}>
+    <div className="cursor-pointer flex justify-center">
+      <img 
+        src="https://czzidhzzpqegfvvmdgno.supabase.co/storage/v1/object/public/box/logos/logo_entregaswoo_600x240_branco.png"
+        alt="EntregasWoo"
+        className="h-20 w-auto object-contain" // ← Um pouco maior no sidebar
+      />
+    </div>
+    <p className="text-purple-300 text-sm mt-2 text-center">Sistema de Gestão</p>
+  </Link>
+</div>
 
         {/* Menu de navegação */}
         <nav className="flex-1 p-4 overflow-y-auto">

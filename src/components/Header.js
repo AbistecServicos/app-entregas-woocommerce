@@ -31,14 +31,23 @@ export default function Header({
           {!showMenuButton && <div className="w-10 h-10"></div>}
         </div>
 
-        {/* ================================================================== */}
-        {/* CENTRO: TÍTULO (CUSTOMIZÁVEL PARA PÁGINAS SEM SIDEBAR) */}
-        {/* ================================================================== */}
-        <div className="flex-1 text-center lg:text-left">
-          <h1 className="text-xl font-semibold text-gray-900">
-            {title || 'EntregasWoo'} {/* Usa título customizado ou padrão */}
-          </h1>
-        </div>
+{/* ================================================================== */}
+{/* CENTRO: LOGO (CUSTOMIZÁVEL PARA PÁGINAS SEM SIDEBAR) */}
+{/* ================================================================== */}
+<div className="flex-1 flex justify-center lg:justify-start">
+  <div className="flex items-center">
+    <img 
+      src="https://czzidhzzpqegfvvmdgno.supabase.co/storage/v1/object/public/box/logos/logo_entregaswoo_600x240.png"
+      alt="EntregasWoo"
+      className="h-16 w-auto object-contain" // ← Altura fixa de 64px, largura automática
+    />
+    {title && (
+      <h1 className="text-xl font-semibold text-gray-900 ml-4 hidden md:block">
+        {title}
+      </h1>
+    )}
+  </div>
+</div>
 
         {/* ================================================================== */}
         {/* LADO DIREITO: NOTIFICAÇÕES E PERFIL */}
