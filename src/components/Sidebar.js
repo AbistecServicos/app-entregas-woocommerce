@@ -11,7 +11,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const { user, userProfile, userRole, userLojas, loading: loadingUser, error } = useUserProfile();
   
   // Itens do menu (mantido igual)
-  const homeItem = { path: '/', icon: '🏠', label: 'Home' };
+  const homeItem = { path: '/', icon: '🏠', label: 'EntregasWoo' };
+  const vendasWooItem = { path: '/vendaswoo', icon: '🛍️', label: 'VendasWoo' };
   const perfilItem = { path: '/perfil', icon: '👤', label: 'Meu Perfil' };
   const pendentesItem = { path: '/pedidos-pendentes', icon: '📋', label: 'Pedidos Pendentes' };
   const aceitosItem = { path: '/pedidos-aceitos', icon: '✅', label: 'Pedidos Aceitos' };
@@ -22,7 +23,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const adminItem = { path: '/admin', icon: '⚙️', label: 'Administração' };
 
   // Montagem condicional dos itens (mantido igual)
-  let menuItems = [homeItem];
+  let menuItems = [homeItem, vendasWooItem]; // ← Adicione após homeItem
 
   if (user) {
     menuItems.push(perfilItem);

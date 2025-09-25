@@ -221,7 +221,7 @@ export default function HomePage() {
                 <li><Link href="#como-funciona">Como Funciona</Link></li>
                 <li><Link href="#para-lojas">Para Lojas</Link></li>
                 <li><Link href="#para-entregadores">Para Entregadores</Link></li>
-                <li><a href="https://pedidossimples.com.br/vendaswoo/" target="_blank" rel="noopener noreferrer">VendasWoo</a></li>
+                <li><a href="https://www.entregaswoo.com.br/" target="_blank" rel="noopener noreferrer">VendasWoo</a></li>
               </ul>
             </div>
             <div className="footer-column">
