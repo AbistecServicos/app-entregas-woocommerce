@@ -2,7 +2,7 @@
 importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
 
-// ✅ USE SUAS VARIÁVEIS DE AMBIENTE (as mesmas do firebase.js)
+// 🔥 USE AS MESMAS CONFIGURAÇÕES DO SEU .env.local
 firebase.initializeApp({
   apiKey: "AIzaSyCQbJZQ1RP2VJvQOqUTDp-rvxCSN_cf4ZQ",
   authDomain: "entregaswoonotificacoes.firebaseapp.com",
@@ -14,42 +14,38 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// ✅ BACKGROUND MESSAGE HANDLER (Quando app está fechado)
+// ✅ CONFIGURAÇÃO IMPORTANTE: Definir background handler
 messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Background message received:', payload);
+  console.log('[SW] Notificação em background:', payload);
   
   const notificationTitle = payload.notification?.title || 'Novo Pedido';
   const notificationOptions = {
-    body: payload.notification?.body || 'Você tem uma nova notificação',
+    body: payload.notification?.body || 'Você tem um novo pedido disponível',
     icon: '/icon-192x192.png',
     badge: '/icon-192x192.png',
-    data: payload.data || {} // Passa dados para quando clicar na notificação
+    data: payload.data || {}
   };
 
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-// ✅ CLICK HANDLER (Quando usuário clica na notificação)
+// ✅ CLICK HANDLER
 self.addEventListener('notificationclick', (event) => {
-  console.log('Notification clicked:', event.notification);
-  
+  console.log('[SW] Notificação clicada:', event.notification);
   event.notification.close();
   
-  // Abre/foca a aplicação
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
-        // Tenta focar em uma janela existente
-        for (const client of clientList) {
-          if (client.url.includes('/') && 'focus' in client) {
-            return client.focus();
-          }
+    clients.matchAll({ type: 'window' }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes('/pedidos-pendentes') && 'focus' in client) {
+          return client.focus();
         }
-        
-        // Se não encontrou, abre nova janela
-        if (clients.openWindow) {
-          return clients.openWindow('/');
-        }
-      })
+      }
+      if (clients.openWindow) {
+        return clients.openWindow('/pedidos-pendentes');
+      }
+    })
   );
 });
+
+console.log('[SW] Service Worker carregado com sucesso!');

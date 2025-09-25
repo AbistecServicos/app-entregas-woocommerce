@@ -4,58 +4,77 @@ import { messaging, requestForToken, onMessageListener } from '../../lib/firebas
 import { supabase } from '../../lib/supabase';
 
 export const useFirebaseNotifications = (userId) => {
+  // ✅ VALORES PADRÃO DEFINIDOS
   const [token, setToken] = useState(null);
   const [notification, setNotification] = useState(null);
   const [isSupported, setIsSupported] = useState(false);
+  const [permission, setPermission] = useState('default');
 
-  // ✅ VERIFICAR SUPORTE DO NAVEGADOR
   useEffect(() => {
-    if (typeof window !== 'undefined' && 
-        'serviceWorker' in navigator && 
-        'PushManager' in window) {
-      setIsSupported(true);
-    }
+    // ✅ VERIFICAR SUPORTE CORRETAMENTE
+    const checkSupport = () => {
+      if (typeof window !== 'undefined' && 
+          'serviceWorker' in navigator && 
+          'PushManager' in window) {
+        setIsSupported(true);
+        setPermission(Notification.permission);
+      }
+    };
+    
+    checkSupport();
   }, []);
 
-  // ✅ SOLICITAR PERMISSÃO E OBTER TOKEN
+  // ✅ SOLICITAR PERMISSÃO COM TRATAMENTO DE ERRO
   useEffect(() => {
     if (!isSupported || !userId) return;
 
     const initializeNotifications = async () => {
       try {
-        // Verificar se já temos permissão
-        const permission = await Notification.requestPermission();
+        console.log('🔔 Inicializando notificações para usuário:', userId);
         
-        if (permission === 'granted') {
+        // ✅ AGUARDAR SERVICE WORKER ESTAR PRONTO
+        if (navigator.serviceWorker.controller) {
+          console.log('✅ Service Worker já está controlando a página');
+        } else {
+          // Registrar service worker se não estiver registrado
+          const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+          console.log('✅ Service Worker registrado:', registration);
+        }
+
+        await navigator.serviceWorker.ready;
+        console.log('✅ Service Worker pronto para uso');
+        
+        const currentPermission = await Notification.requestPermission();
+        setPermission(currentPermission);
+        
+        if (currentPermission === 'granted') {
           const currentToken = await requestForToken();
           
           if (currentToken) {
             setToken(currentToken);
-            console.log('✅ Token FCM obtido:', currentToken);
+            console.log('✅ Token FCM obtido:', currentToken.substring(0, 50) + '...');
 
-            // ✅ SALVAR TOKEN NO SUPABASE
+            // Salvar token no Supabase
             const { error } = await supabase
               .from('user_tokens')
-              .upsert(
-                {
-                  user_id: userId,
-                  token: currentToken,
-                  updated_at: new Date().toISOString()
-                },
-                { 
-                  onConflict: 'user_id,token',
-                  ignoreDuplicates: false 
-                }
-              );
+              .upsert({
+                user_id: userId,
+                token: currentToken,
+                updated_at: new Date().toISOString()
+              }, {
+                onConflict: 'user_id,token'
+              });
 
             if (error) {
               console.error('❌ Erro ao salvar token:', error);
             } else {
-              console.log('✅ Token salvo/atualizado no Supabase');
+              console.log('✅ Token salvo no Supabase');
             }
+          } else {
+            console.log('⚠️ Não foi possível obter token FCM');
           }
         } else {
-          console.warn('❌ Permissão para notificações negada');
+          console.log('❌ Permissão de notificação negada:', currentPermission);
         }
       } catch (error) {
         console.error('❌ Erro na inicialização de notificações:', error);
@@ -71,16 +90,15 @@ export const useFirebaseNotifications = (userId) => {
 
     onMessageListener()
       .then((payload) => {
-        console.log('📩 Mensagem em foreground:', payload);
+        console.log('📩 Notificação recebida em foreground:', payload);
         setNotification(payload);
 
-        // ✅ MOSTRAR NOTIFICAÇÃO MESMO EM FOREGROUND
+        // Mostrar notificação mesmo em foreground
         if (payload.notification && Notification.permission === 'granted') {
-          const { title, body, icon } = payload.notification;
-          
+          const { title, body } = payload.notification;
           new Notification(title, {
             body,
-            icon: icon || '/icon-192x192.png',
+            icon: '/icon-192x192.png',
             badge: '/icon-192x192.png',
             data: payload.data || {}
           });
@@ -91,10 +109,11 @@ export const useFirebaseNotifications = (userId) => {
       });
   }, [isSupported]);
 
+  // ✅ RETORNAR VALORES PADRÃO SEMPRE
   return { 
     token, 
     notification, 
     isSupported,
-    permission: typeof window !== 'undefined' ? Notification.permission : 'default'
+    permission
   };
 };

@@ -2,31 +2,15 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-// Corrigido de '../lib/supabase' para '../../lib/supabase'
 import { supabase } from '../../lib/supabase';
 import { useUserProfile } from '../hooks/useUserProfile';
 import UserProfile from './UserProfile';
 
-// ==============================================================================
-// COMPONENTE SIDEBAR - MENU LATERAL
-// ==============================================================================
-/**
- * Sidebar é o menu de navegação lateral do sistema.
- * Contém: Logo, Menu de navegação, Perfil do usuário e Botão de login/logout.
- * Responsivo: Mobile (overlay) e Desktop (fixo).
- * Integra com useUserProfile para gerenciar autenticação e visibilidade de menus.
- */
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const router = useRouter();
- const { user, userProfile, userRole, userLojas, loading: loadingUser, error } = useUserProfile();
+  const { user, userProfile, userRole, userLojas, loading: loadingUser, error } = useUserProfile();
   
-  // ============================================================================
-  // 1. DEFINIÇÃO DOS ITENS DO MENU (INDIVIDUAIS)
-  // ============================================================================
-  /**
-   * Definimos cada item separadamente para facilitar a montagem condicional.
-   * Cada item tem: path (rota), icon (emoji), label (texto).
-   */
+  // Itens do menu (mantido igual)
   const homeItem = { path: '/', icon: '🏠', label: 'Home' };
   const perfilItem = { path: '/perfil', icon: '👤', label: 'Meu Perfil' };
   const pendentesItem = { path: '/pedidos-pendentes', icon: '📋', label: 'Pedidos Pendentes' };
@@ -37,69 +21,36 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const relatoriosItem = { path: '/relatorios', icon: '📈', label: 'Relatórios' };
   const adminItem = { path: '/admin', icon: '⚙️', label: 'Administração' };
 
-  // ============================================================================
-  // 2. MONTAGEM CONDICIONAL DOS ITENS DO MENU (CORRIGIDA)
-  // ============================================================================
-  /**
-   * Constrói a lista de menuItems dinamicamente com base no user e userRole.
-   * - Sempre inclui 'Home'.
-   * - Para logados: Adiciona 'Meu Perfil'.
-   * - Para 'entregador': Adiciona menus de pedidos pendentes e aceitos.
-   * - Para 'entregador', 'gerente' e 'admin': Adiciona pedidos entregues.
-   * - Para associados à loja (userLojas.length > 0) ou admin: Adiciona 'Relatórios'.
-   * - Para 'gerente' ou 'admin': Adiciona gestão e todos os pedidos.
-   * - Para 'admin': Adiciona administração.
-   * 
-   * ✅ CORREÇÃO: Pedidos Pendentes e Aceitos são APENAS para entregadores.
-   */
-  let menuItems = [homeItem]; // Sempre visível (até para não logados)
+  // Montagem condicional dos itens (mantido igual)
+  let menuItems = [homeItem];
 
-  if (user) { // Apenas para usuários logados
+  if (user) {
     menuItems.push(perfilItem);
 
-    // --------------------------------------------------------------------------
-    // BLOCO A: ITENS DE PEDIDOS PENDENTES E ACEITOS (APENAS ENTREGADORES)
-    // --------------------------------------------------------------------------
     if (userRole === 'entregador') {
       menuItems.push(pendentesItem, aceitosItem);
     }
 
-    // --------------------------------------------------------------------------
-    // BLOCO B: ITENS DE PEDIDOS ENTREGUES (ENTREGADORES, GERENTES E ADMIN)
-    // --------------------------------------------------------------------------
     if (['entregador', 'gerente', 'admin'].includes(userRole)) {
       menuItems.push(entreguesItem);
     }
 
-    // --------------------------------------------------------------------------
-    // BLOCO C: RELATÓRIOS (para quem está vinculado a loja ou admin)
-    // --------------------------------------------------------------------------
     if (userLojas.length > 0 || userRole === 'admin') {
       menuItems.push(relatoriosItem);
     }
 
-    // --------------------------------------------------------------------------
-    // BLOCO D: GESTÃO E TODOS OS PEDIDOS (GERENTE E ADMIN)
-    // --------------------------------------------------------------------------
     if (['gerente', 'admin'].includes(userRole)) {
       menuItems.push(gestaoItem, todosItem);
     }
 
-    // --------------------------------------------------------------------------
-    // BLOCO E: ADMINISTRAÇÃO (APENAS ADMIN)
-    // --------------------------------------------------------------------------
     if (userRole === 'admin') {
       menuItems.push(adminItem);
     }
   }
 
   // ============================================================================
-  // 3. FUNÇÃO: LOGOUT DO USUÁRIO
+  // FUNÇÃO DE LOGOUT CORRIGIDA
   // ============================================================================
-  /**
-   * Realiza o logout do usuário via Supabase.
-   * O useUserProfile lida com a atualização dos estados e redirecionamento.
-   */
   const handleLogout = async () => {
     try {
       // Fechar sidebar no mobile antes do logout
@@ -112,17 +63,21 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       if (error) throw error;
       
       console.log('Logout realizado com sucesso');
+      
+      // 🎯 CORREÇÃO: REDIRECIONAR PARA PÁGINA INICIAL
+      router.push('/');
+      
+      // 🎯 CORREÇÃO: FORÇAR ATUALIZAÇÃO DO MENU
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
+      
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
     }
   };
 
-  // ============================================================================
-  // 4. FUNÇÃO: REDIRECIONAR PARA LOGIN
-  // ============================================================================
-  /**
-   * Redireciona para a página de login quando o usuário não está autenticado.
-   */
+  // Funções auxiliares (mantidas iguais)
   const handleLoginRedirect = () => {
     if (window.innerWidth < 1024) {
       toggleSidebar();
@@ -130,21 +85,13 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
     router.push('/login');
   };
 
-  // ============================================================================
-  // 5. FUNÇÃO: FECHAR SIDEBAR AO CLICAR EM ITEM (MOBILE)
-  // ============================================================================
-  /**
-   * Fecha o sidebar no mobile quando um item de menu é clicado.
-   */
   const handleMenuItemClick = () => {
     if (window.innerWidth < 1024) {
       toggleSidebar();
     }
   };
 
-  // ============================================================================
-  // 6. RENDERIZAÇÃO DO COMPONENTE
-  // ============================================================================
+  // Renderização (mantida igual)
   return (
     <>
       {/* Overlay para mobile */}
@@ -196,11 +143,11 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         {user && (
           <div className="p-4 border-t border-purple-700 bg-purple-900">
             <UserProfile 
-  userProfile={userProfile} 
-  userRole={userRole} 
-  loading={loadingUser}
-  error={error}
-/>
+              userProfile={userProfile} 
+              userRole={userRole} 
+              loading={loadingUser}
+              error={error}
+            />
           </div>
         )}
 

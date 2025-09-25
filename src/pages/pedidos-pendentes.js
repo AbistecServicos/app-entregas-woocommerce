@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/router';
 import { OrderModal, WithoutCourier } from '../components/OrderModal';
+import { notifyNewOrder } from '../utils/notificationSender';
 
 // ==============================================================================
 // COMPONENTE PRINCIPAL - PEDIDOS PENDENTES
@@ -25,6 +26,67 @@ export default function PedidosPendentes() {
   }, []);
 
   // ============================================================================
+  // 2.1 EFFECT: ESCUTAR NOVOS PEDIDOS EM TEMPO REAL
+  // ============================================================================
+  useEffect(() => {
+    const setupRealtimeListener = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        console.log('🔔 Configurando listener em tempo real...');
+
+        // Buscar as lojas do entregador
+        const { data: lojasEntregador } = await supabase
+          .from('loja_associada')
+          .select('id_loja')
+          .eq('uid_usuario', user.id)
+          .eq('status_vinculacao', 'ativo');
+
+        if (!lojasEntregador || lojasEntregador.length === 0) return;
+
+        const idsLojasEntregador = lojasEntregador.map(loja => loja.id_loja);
+
+        // Configurar subscription
+        const subscription = supabase
+          .channel('pedidos-pendentes-realtime')
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'pedidos',
+              filter: `status_transporte=in.(aguardando,revertido)`
+            },
+            async (payload) => {
+              // Verificar se o pedido é das lojas do entregador
+              if (idsLojasEntregador.includes(payload.new.id_loja)) {
+                console.log('🎉 NOVO PEDIDO EM TEMPO REAL:', payload.new);
+                
+                // 🚀 NOTIFICAR O ENTREGADOR ATUAL
+                await notifyNewOrder(
+                  user.id,
+                  payload.new.id,
+                  payload.new.loja_nome
+                );
+                
+                // Atualizar lista
+                setPedidos(current => [payload.new, ...current]);
+              }
+            }
+          )
+          .subscribe();
+
+        return () => subscription.unsubscribe();
+      } catch (error) {
+        console.error('❌ Erro no listener:', error);
+      }
+    };
+
+    setupRealtimeListener();
+  }, []);
+
+  // ============================================================================
   // 3. FUNÇÃO: VERIFICAR AUTENTICAÇÃO + BUSCAR PEDIDOS
   // ============================================================================
   const checkAuthAndGetPedidos = async () => {
@@ -42,125 +104,145 @@ export default function PedidosPendentes() {
     }
   };
 
-// ============================================================================
-// 4. FUNÇÃO: BUSCAR PEDIDOS PENDENTES (CORRIGIDA)
-// ============================================================================
-const getPedidosPendentes = async () => {
-  try {
-    setLoading(true);
-    
-    // 1. Primeiro, buscar as lojas do entregador autenticado
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    const { data: lojasEntregador, error: errorLojas } = await supabase
-      .from('loja_associada')
-      .select('id_loja')
-      .eq('uid_usuario', user.id)
-      .eq('status_vinculacao', 'ativo');
+  // ============================================================================
+  // 4. FUNÇÃO: BUSCAR PEDIDOS PENDENTES
+  // ============================================================================
+  const getPedidosPendentes = async () => {
+    try {
+      setLoading(true);
+      
+      // 1. Buscar as lojas do entregador autenticado
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { data: lojasEntregador, error: errorLojas } = await supabase
+        .from('loja_associada')
+        .select('id_loja')
+        .eq('uid_usuario', user.id)
+        .eq('status_vinculacao', 'ativo');
 
-    if (errorLojas) {
-      console.error('Erro ao buscar lojas do entregador:', errorLojas);
-      return;
+      if (errorLojas) {
+        console.error('Erro ao buscar lojas do entregador:', errorLojas);
+        return;
+      }
+
+      // 2. Se não tiver lojas, não mostra nenhum pedido
+      if (!lojasEntregador || lojasEntregador.length === 0) {
+        setPedidos([]);
+        return;
+      }
+
+      // 3. Extrair IDs das lojas
+      const idsLojasEntregador = lojasEntregador.map(loja => loja.id_loja);
+
+      // 4. Buscar pedidos APENAS das lojas do entregador
+      const { data, error } = await supabase
+        .from('pedidos')
+        .select('*')
+        .in('status_transporte', ['aguardando', 'revertido'])
+        .in('id_loja', idsLojasEntregador)
+        .order('data', { ascending: false });
+
+      if (error) throw error;
+      setPedidos(data || []);
+      
+      // 🎯 NOTIFICAÇÃO PARA PEDIDOS NOVOS
+      if (data && data.length > 0) {
+        const ultimoPedidoNotificado = localStorage.getItem('ultimoPedidoNotificado');
+        const pedidosNovos = data.filter(pedido => 
+          pedido.id > (ultimoPedidoNotificado || 0)
+        );
+        
+        if (pedidosNovos.length > 0) {
+          console.log(`🔔 ${pedidosNovos.length} novo(s) pedido(s) encontrado(s)`);
+          const pedidoMaisRecente = pedidosNovos[0];
+          
+          // 🚀 NOTIFICAR O ENTREGADOR ATUAL
+          await notifyNewOrder(
+            user.id,
+            pedidoMaisRecente.id,
+            pedidoMaisRecente.loja_nome
+          );
+          
+          localStorage.setItem('ultimoPedidoNotificado', pedidoMaisRecente.id);
+        }
+      }
+      
+    } catch (error) {
+      console.error('Erro ao buscar pedidos:', error);
+      alert('Erro ao carregar pedidos.');
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // 2. Se não tiver lojas, não mostra nenhum pedido
-    if (!lojasEntregador || lojasEntregador.length === 0) {
-      setPedidos([]);
-      return;
+  // ============================================================================
+  // 5. FUNÇÃO: ACEITAR PEDIDO
+  // ============================================================================
+  const handleAceitarPedido = async (pedidoId) => {
+    try {
+      setLoadingAceitar(true);
+      
+      // 1. Verificar se usuário está autenticado
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        alert('Sessão expirada. Faça login novamente.');
+        router.push('/login');
+        return;
+      }
+
+      // 2. Buscar telefone do usuário
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('telefone, nome_completo')
+        .eq('uid', user.id)
+        .single();
+
+      if (usuarioError) {
+        console.warn('Erro ao buscar telefone do usuário:', usuarioError);
+      }
+
+      // 3. Buscar dados da loja associada
+      const { data: entregadorData, error: entregadorError } = await supabase
+        .from('loja_associada')
+        .select('nome_completo, loja_telefone, loja_nome')
+        .eq('uid_usuario', user.id)
+        .limit(1);
+
+      if (entregadorError) {
+        console.warn('Erro ao buscar dados da loja:', entregadorError);
+      }
+
+      const entregador = entregadorData?.[0];
+      const usuario = usuarioData;
+
+      // 4. Atualizar pedido
+      const { error: updateError } = await supabase
+        .from('pedidos')
+        .update({
+          status_transporte: 'aceito',
+          aceito_por_uid: user.id,
+          aceito_por_nome: entregador?.nome_completo || usuario?.nome_completo || user.email,
+          aceito_por_email: user.email,
+          aceito_por_telefone: usuario?.telefone || entregador?.loja_telefone || 'Não informado',
+          ultimo_status: new Date().toISOString()
+        })
+        .eq('id', pedidoId);
+
+      if (updateError) {
+        throw new Error('Erro ao atualizar pedido: ' + updateError.message);
+      }
+
+      // 5. Atualizar lista localmente
+      setPedidos(pedidos.filter(pedido => pedido.id !== pedidoId));
+      alert('✅ Pedido aceito com sucesso!');
+
+    } catch (error) {
+      console.error('Erro ao aceitar pedido:', error);
+      alert(`❌ ${error.message}`);
+    } finally {
+      setLoadingAceitar(false);
     }
-
-    // 3. Extrair apenas os IDs das lojas
-    const idsLojasEntregador = lojasEntregador.map(loja => loja.id_loja);
-
-    // 4. Buscar pedidos APENAS das lojas do entregador
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select('*')
-      .in('status_transporte', ['aguardando', 'revertido'])
-      .in('id_loja', idsLojasEntregador) // ✅ FILTRO CRÍTICO AQUI
-      .order('data', { ascending: false });
-
-    if (error) throw error;
-    setPedidos(data || []);
-    
-  } catch (error) {
-    console.error('Erro ao buscar pedidos:', error);
-    alert('Erro ao carregar pedidos.');
-  } finally {
-    setLoading(false);
-  }
-};
-
-// ============================================================================
-// 5. FUNÇÃO: ACEITAR PEDIDO (CORRIGIDA - ESTRUTURA CORRETA)
-// ============================================================================
-const handleAceitarPedido = async (pedidoId) => {
-  try {
-    setLoadingAceitar(true);
-    
-    // 1. Verificar se usuário está autenticado
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      alert('Sessão expirada. Faça login novamente.');
-      router.push('/login');
-      return;
-    }
-
-    // 2. ✅ BUSCAR TELEFONE DO USUÁRIO na tabela usuarios
-    const { data: usuarioData, error: usuarioError } = await supabase
-      .from('usuarios')
-      .select('telefone, nome_completo')
-      .eq('uid', user.id)
-      .single();
-
-    if (usuarioError) {
-      console.warn('Erro ao buscar telefone do usuário:', usuarioError);
-      // Não impede a continuação - usamos valores padrão
-    }
-
-    // 3. ✅ BUSCAR DADOS DA LOJA ASSOCIADA
-    const { data: entregadorData, error: entregadorError } = await supabase
-      .from('loja_associada')
-      .select('nome_completo, loja_telefone, loja_nome')
-      .eq('uid_usuario', user.id)
-      .limit(1);
-
-    if (entregadorError) {
-      console.warn('Erro ao buscar dados da loja:', entregadorError);
-      // Não impede a continuação
-    }
-
-    const entregador = entregadorData?.[0];
-    const usuario = usuarioData;
-
-    // 4. ✅ ATUALIZAR PEDIDO COM DADOS CORRETOS
-    const { error: updateError } = await supabase
-      .from('pedidos')
-      .update({
-        status_transporte: 'aceito',
-        aceito_por_uid: user.id,
-        aceito_por_nome: entregador?.nome_completo || usuario?.nome_completo || user.email,
-        aceito_por_email: user.email,
-        aceito_por_telefone: usuario?.telefone || entregador?.loja_telefone || 'Não informado',
-        ultimo_status: new Date().toISOString()
-      })
-      .eq('id', pedidoId);
-
-    if (updateError) {
-      throw new Error('Erro ao atualizar pedido: ' + updateError.message);
-    }
-
-    // 5. Atualizar lista localmente
-    setPedidos(pedidos.filter(pedido => pedido.id !== pedidoId));
-    alert('✅ Pedido aceito com sucesso!');
-
-  } catch (error) {
-    console.error('Erro ao aceitar pedido:', error);
-    alert(`❌ ${error.message}`);
-  } finally {
-    setLoadingAceitar(false);
-  }
-};
+  };
 
   // ============================================================================
   // 6. FUNÇÕES: CONTROLE DO MODAL
@@ -242,3 +324,4 @@ const handleAceitarPedido = async (pedidoId) => {
     </div>
   );
 }
+// 🎯 FIM DO COMPONENTE - ESTA CHAVE FECHA TUDO!

@@ -61,49 +61,53 @@ export default function Login() {
     }
   };
 
-  // ============================================================================
-  // 4. FUNÇÃO: LOGIN COM EMAIL/SENHA
-  // ============================================================================
-  /**
-   * Autentica o usuário com email/senha e redireciona com base no perfil.
-   * Inclui validação prévia e tratamento de erros detalhado.
-   */
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+// ============================================================================
+// 4. FUNÇÃO: LOGIN COM EMAIL/SENHA (CORRIGIDA)
+// ============================================================================
+/**
+ * Autentica o usuário com email/senha e redireciona com base no perfil.
+ * Inclui validação prévia e tratamento de erros detalhado.
+ * ✅ CORREÇÃO: Força atualização do sidebar após login
+ */
+const handleLogin = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setError('');
 
-    if (!formValid) {
-      setError('Por favor, insira um email válido e uma senha com pelo menos 6 caracteres.');
-      setLoading(false);
-      return;
+  if (!formValid) {
+    setError('Por favor, insira um email válido e uma senha com pelo menos 6 caracteres.');
+    setLoading(false);
+    return;
+  }
+
+  try {
+    // 4.1. AUTENTICAÇÃO COM SUPABASE
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    
+    if (authError) {
+      throw authError;
     }
 
-    try {
-      // 4.1. AUTENTICAÇÃO COM SUPABASE
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      
-      if (authError) {
-        throw authError;
-      }
+    // 🎯 NOVO: AGUARDAR PROCESSAMENTO DO SUPABASE
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-      // 4.2. VERIFICAÇÃO DE PERFIL E REDIRECIONAMENTO
-      const { data: usuario, error: userError } = await supabase
-        .from('usuarios')
-        .select('is_admin')
-        .eq('uid', authData.user.id)
-        .single();
-      
-      if (userError) throw userError;
+    // 4.2. VERIFICAÇÃO DE PERFIL E REDIRECIONAMENTO
+    const { data: usuario, error: userError } = await supabase
+      .from('usuarios')
+      .select('is_admin')
+      .eq('uid', authData.user.id)
+      .single();
+    
+    if (userError) throw userError;
 
-      if (usuario.is_admin) {
-        router.push('/admin');
-        return;
-      }
+    let redirectPath = '/';
 
+    if (usuario.is_admin) {
+      redirectPath = '/admin';
+    } else {
       const { data: associacoes, error: assocError } = await supabase
         .from('loja_associada')
         .select('funcao')
@@ -121,49 +125,68 @@ export default function Login() {
       const primeiraAssociacao = associacoes[0];
       switch (primeiraAssociacao.funcao) {
         case 'gerente':
-          router.push('/todos-pedidos');
+          redirectPath = '/todos-pedidos';
           break;
         case 'entregador':
-          router.push('/pedidos-pendentes');
+          redirectPath = '/pedidos-pendentes';
           break;
         default:
           throw new Error('Função não reconhecida.');
       }
-    } catch (error) {
-      // 4.3. TRATAMENTO DE ERROS AMIGÁVEL
-      setError(translateError(error));
-      console.error('Erro no login:', error);
-    } finally {
-      // 4.4. FINALIZAÇÃO
-      setLoading(false);
     }
-  };
 
-  // ============================================================================
-  // 5. FUNÇÃO: LOGIN COM GOOGLE
-  // ============================================================================
-  /**
-   * Inicia o fluxo de login com Google OAuth, redirecionando para completar perfil.
-   * Inclui tratamento de erros e feedback visual.
-   */
-  const handleGoogleLogin = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/perfil`,
-        },
-      });
-      if (error) throw error;
-    } catch (error) {
-      setError(translateError(error));
-      console.error('Erro no login Google:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    // 🎯 CORREÇÃO: REDIRECIONAMENTO COM ATUALIZAÇÃO FORÇADA
+    console.log('✅ Login bem-sucedido, redirecionando para:', redirectPath);
+    
+    // Primeiro redireciona para a página correta
+    router.push(redirectPath);
+    
+    // 🎯 NOVO: FORÇAR ATUALIZAÇÃO COMPLETA APÓS 1 SEGUNDO
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
+    
+  } catch (error) {
+    // 4.3. TRATAMENTO DE ERROS AMIGÁVEL
+    setError(translateError(error));
+    console.error('Erro no login:', error);
+  } finally {
+    // 4.4. FINALIZAÇÃO
+    setLoading(false);
+  }
+};
+
+// ============================================================================
+// 5. FUNÇÃO: LOGIN COM GOOGLE (CORRIGIDA)
+// ============================================================================
+/**
+ * Inicia o fluxo de login com Google OAuth, redirecionando para completar perfil.
+ * ✅ CORREÇÃO: Adiciona parâmetro para forçar atualização após retorno
+ */
+const handleGoogleLogin = async () => {
+  try {
+    setLoading(true);
+    setError('');
+    
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        // 🎯 CORREÇÃO: ADICIONAR PARÂMETRO DE CONTROLE
+        redirectTo: `${window.location.origin}/perfil?fromLogin=true`,
+      },
+    });
+    
+    if (error) throw error;
+    
+    console.log('🔐 Redirecionando para autenticação Google...');
+    
+  } catch (error) {
+    setError(translateError(error));
+    console.error('Erro no login Google:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ============================================================================
   // 6. RENDERIZAÇÃO DO COMPONENTE
