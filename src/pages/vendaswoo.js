@@ -57,21 +57,22 @@ export default function VendasWoo() {
           {/* ================================================================== */}
           {/* HEADER PRINCIPAL */}
           {/* ================================================================== */}
-          <header className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white rounded-2xl p-8 text-center shadow-xl mb-8">
-            <div className="logo-container mb-6">
-              <img 
-                src="https://midias.abistec.com.br/logo_abistec_email.png" 
-                alt="Abistec Serviços Tecnológicos" 
-                className="max-w-xs mx-auto"
-              />
-            </div>
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-shadow">
-              Informatize seu negócio e aumente seus lucros com pequeno investimento
-            </h1>
-            <p className="text-xl md:text-2xl opacity-90 max-w-4xl mx-auto">
-              Sua loja virtual profissional com gestão simplificada e suporte especializado
-            </p>
-          </header>
+{/* HEADER PRINCIPAL - VERSÃO OTIMIZADA */}
+<header className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white rounded-2xl p-4 sm:p-6 md:p-8 text-center shadow-xl mb-8">
+  <div className="logo-container mb-3 sm:mb-4 md:mb-6">
+    <img 
+      src="https://midias.abistec.com.br/logo_abistec_email.png" 
+      alt="Abistec Serviços Tecnológicos" 
+      className="max-w-[18rem] sm:max-w-[12rem] md:max-w-[15rem] lg:max-w-[18rem] xl:max-w-[20rem] mx-auto"
+    />
+  </div>
+  <h1 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 text-shadow px-2">
+    Informatize seu negócio e aumente seus lucros com pequeno investimento
+  </h1>
+  <p className="text-sm sm:text-lg md:text-xl lg:text-2xl opacity-90 max-w-4xl mx-auto px-4">
+    Sua loja virtual profissional com gestão simplificada e suporte especializado
+  </p>
+</header>
 
           {/* ================================================================== */}
           {/* TÍTULO DA SEÇÃO DE FUNCIONALIDADES */}
