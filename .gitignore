@@ -1,8 +1,60 @@
-# Ignorar pasta gerada pelo Next.js
-.next/
-# Ignorar node_modules
+# ==========================
+# Pastas de build e dependências
+# ==========================
 node_modules/
-# Ignorar ambiente local
+.next/
+out/
+dist/
+
+# ==========================
+# Arquivos de ambiente (senhas e configs locais)
+# ==========================
+.env
+.env.*.local
 .env.local
-# Ignorar logs ou arquivos temporários
+
+# ==========================
+# Logs e arquivos temporários
+# ==========================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 *.log
+*.tmp
+
+# ==========================
+# Cache e editor
+# ==========================
+.cache/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ==========================
+# Arquivos de chaves/credenciais
+# ==========================
+*.pem
+*.key
+*.crt
+*.pfx
+*.jks
+
+# Ignorar pasta de documentação local
+doc/
+docs/
+
+
+
+# OU, se quiser ignorar só a sua chave específica:
+# entregaswoonotificacoes-12c8c6f634220.json
+
+# ==========================
+# Arquivos auxiliares seus (.txt de testes)
+# ==========================
+*.txt
+ 
+# Proteger arquivos sens�veis da pasta raiz 
+../*.json 
+../doc/ 
