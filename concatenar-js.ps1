@@ -2,7 +2,7 @@
 $baseDir = "C:\dev\app-entregas-woocommerce\frontend"
 
 # Pasta onde o arquivo de saída será gerado
-$outputDir = $baseDir
+$outputDir = "C:\dev\app-entregas-woocommerce\doc"
 
 # Arquivo de saída
 $outfile = "$outputDir\saida.txt"

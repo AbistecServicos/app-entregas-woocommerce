@@ -1,5 +1,5 @@
 # ========================== 
-# Pastas de build e dependàncias 
+# Pastas de build e depend√™ncias
 # ========================== 
 node_modules/ 
 .next/ 
@@ -14,7 +14,7 @@ dist/
 .env.local 
  
 # ========================== 
-# Logs e arquivos tempor†rios 
+# Logs e arquivos tempor√°rios
 # ========================== 
 npm-debug.log* 
 yarn-debug.log* 
@@ -43,7 +43,7 @@ Thumbs.db
 *.json 
  
 # ========================== 
-# Pastas de documentaá∆o 
+# Pastas de documenta√ß√£o
 # ========================== 
 doc/ 
 docs/ 
@@ -52,3 +52,4 @@ docs/
 # Arquivos auxiliares seus (.txt de testes) 
 # ========================== 
 *.txt 
+*.ps1
