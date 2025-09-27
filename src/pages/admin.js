@@ -1,6 +1,6 @@
 // pages/admin.js
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase'; // Caminho corrigido
+import { supabase } from '../../lib/supabase';
 import { useUserProfile } from '../hooks/useUserProfile';
 import RouteGuard from '../components/RouteGuard';
 import DetalheLojaModal from '../components/OrderModal/DetalheLojaModal';
@@ -212,7 +212,46 @@ export default function Admin() {
   };
 
   // ============================================================================
-  // 5. FUNÇÕES: MODAL DE DETALHES DA LOJA
+  // 5. FUNÇÃO: EXCLUIR USUÁRIO PENDENTE
+  // ============================================================================
+  const handleExcluirUsuario = async (usuario) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o usuário "${usuario.nome_completo}"?\n\nEsta ação é irreversível e removerá o usuário do sistema.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // 1. Primeiro, excluir da tabela de autenticação do Supabase
+      const { error: authError } = await supabase.auth.admin.deleteUser(usuario.uid);
+      
+      if (authError) {
+        console.warn('Erro ao excluir da autenticação (pode ser que o usuário já não exista):', authError.message);
+        // Continua mesmo com erro, pois o usuário pode já ter sido excluído da auth mas não da tabela
+      }
+
+      // 2. Depois, excluir da tabela usuarios
+      const { error: dbError } = await supabase
+        .from('usuarios')
+        .delete()
+        .eq('uid', usuario.uid);
+
+      if (dbError) throw dbError;
+
+      setSuccess(`Usuário "${usuario.nome_completo}" excluído com sucesso!`);
+      await loadUsuariosPendentes(); // Recarregar a lista
+
+    } catch (err) {
+      setError('Erro ao excluir usuário: ' + err.message);
+      console.error('Erro detalhado:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================================================
+  // 6. FUNÇÕES: MODAL DE DETALHES DA LOJA
   // ============================================================================
   
   const handleOpenModal = (loja) => {
@@ -231,7 +270,7 @@ export default function Admin() {
   };
 
   // ============================================================================
-  // 6. VERIFICAÇÕES DE ACESSO E LOADING
+  // 7. VERIFICAÇÕES DE ACESSO E LOADING
   // ============================================================================
   if (userLoading) {
     return (
@@ -242,7 +281,7 @@ export default function Admin() {
   }
 
   // ============================================================================
-  // 7. RENDERIZAÇÃO PRINCIPAL
+  // 8. RENDERIZAÇÃO PRINCIPAL
   // ============================================================================
   return (
     <RouteGuard requiredRole="admin">
@@ -380,25 +419,44 @@ export default function Admin() {
           {/* ABA: USUÁRIOS PENDENTES */}
           {activeTab === 'usuarios' && (
             <div>
-              <h2 className="text-xl font-semibold mb-4">Usuários Pendentes</h2>
+              <h2 className="text-xl font-semibold mb-4">Usuários Pendentes ({usuariosPendentes.length})</h2>
               {loading ? (
                 <div className="text-center py-4">Carregando...</div>
               ) : (
                 <div className="grid gap-4">
                   {usuariosPendentes.map(usuario => (
                     <div key={usuario.uid} className="bg-white p-4 rounded-lg shadow-md">
-                      <h4 className="font-semibold">{usuario.nome_completo}</h4>
-                      <p className="text-gray-600">{usuario.email}</p>
-                      <p className="text-gray-600">{usuario.telefone}</p>
-                      <button
-                        onClick={() => {
-                          const lojaId = prompt('Digite o ID da loja para associar (ex: L1):');
-                          if (lojaId) handleAssociarGerente(usuario.uid, lojaId);
-                        }}
-                        className="bg-green-500 text-white px-3 py-1 rounded text-sm mt-2 hover:bg-green-600"
-                      >
-                        Associar como Gerente
-                      </button>
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <h4 className="font-semibold text-lg">{usuario.nome_completo}</h4>
+                          <p className="text-gray-600">{usuario.email}</p>
+                          <p className="text-gray-600">{usuario.telefone}</p>
+                          <p className="text-sm text-gray-500">UID: {usuario.uid}</p>
+                        </div>
+                        <div className="flex flex-col space-y-2">
+                          <button
+                            onClick={() => {
+                              const lojaId = prompt('Digite o ID da loja para associar (ex: L1):');
+                              if (lojaId) handleAssociarGerente(usuario.uid, lojaId);
+                            }}
+                            className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors"
+                            title="Associar este usuário como gerente de uma loja"
+                          >
+                            Associar como Gerente
+                          </button>
+                          <button
+                            onClick={() => handleExcluirUsuario(usuario)}
+                            className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors"
+                            title="Excluir este usuário do sistema"
+                            disabled={loading}
+                          >
+                            {loading ? 'Excluindo...' : 'Excluir Usuário'}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-2">
+                        Cadastrado em: {new Date(usuario.data_cadastro).toLocaleDateString('pt-BR')}
+                      </div>
                     </div>
                   ))}
                 </div>
