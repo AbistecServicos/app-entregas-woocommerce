@@ -1,17 +1,13 @@
 // pages/admin.js
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase'; // Caminho corrigido
 import { useUserProfile } from '../hooks/useUserProfile';
 import RouteGuard from '../components/RouteGuard';
+import DetalheLojaModal from '../components/OrderModal/DetalheLojaModal';
 
 // ==============================================================================
 // PÁGINA DE ADMINISTRAÇÃO COM UPLOAD DE LOGO
 // ==============================================================================
-/**
- * Painel administrativo para gerenciamento do sistema
- * Inclui funcionalidade de upload de logos para lojas
- * Acessível apenas para usuários com role 'admin'
- */
 export default function Admin() {
   // ============================================================================
   // 1. ESTADOS E HOOKS
@@ -22,9 +18,9 @@ export default function Admin() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // Novos estados para upload de logo
-  const [uploading, setUploading] = useState(false);
-  const [selectedLojaForUpload, setSelectedLojaForUpload] = useState(null);
+  // Estados para o modal de detalhes da loja
+  const [selectedLoja, setSelectedLoja] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Estados para dados das abas
   const [lojas, setLojas] = useState([]);
@@ -48,9 +44,6 @@ export default function Admin() {
   // 3. FUNÇÕES: CARREGAMENTO DE DADOS
   // ============================================================================
   
-  /**
-   * Carrega lista de lojas cadastradas
-   */
   const loadLojas = async () => {
     try {
       setLoading(true);
@@ -68,9 +61,6 @@ export default function Admin() {
     }
   };
 
-  /**
-   * Carrega usuários não vinculados a lojas (pendentes)
-   */
   const loadUsuariosPendentes = async () => {
     try {
       setLoading(true);
@@ -109,9 +99,6 @@ export default function Admin() {
     }
   };
 
-  /**
-   * Carrega associações ativas entre usuários e lojas
-   */
   const loadAssociacoes = async () => {
     try {
       setLoading(true);
@@ -134,12 +121,9 @@ export default function Admin() {
   };
 
   // ============================================================================
-  // 4. FUNÇÕES: AÇÕES DO ADMIN (CRIAÇÃO E ASSOCIAÇÃO)
+  // 4. FUNÇÕES: AÇÕES DO ADMIN
   // ============================================================================
   
-  /**
-   * Cria uma nova loja no sistema com upload de logo
-   */
   const handleCriarLoja = async (dadosLoja) => {
     try {
       setLoading(true);
@@ -147,7 +131,6 @@ export default function Admin() {
       
       let loja_logo_url = null;
       
-      // Se há arquivo de logo, fazer upload primeiro
       if (dadosLoja.loja_logo instanceof File) {
         const fileExt = dadosLoja.loja_logo.name.split('.').pop();
         const fileName = `logo_loja_${dadosLoja.id_loja}_${Date.now()}.${fileExt}`;
@@ -166,7 +149,6 @@ export default function Admin() {
         loja_logo_url = publicUrl;
       }
       
-      // Criar a loja
       const { error } = await supabase
         .from('lojas')
         .insert([{
@@ -191,15 +173,11 @@ export default function Admin() {
     }
   };
 
-  /**
-   * Associa um usuário como gerente de uma loja
-   */
   const handleAssociarGerente = async (usuarioId, lojaId) => {
     try {
       setLoading(true);
       setError(null);
       
-      // Buscar dados do usuário e loja em paralelo
       const [{ data: usuario }, { data: loja }] = await Promise.all([
         supabase.from('usuarios').select('*').eq('uid', usuarioId).single(),
         supabase.from('lojas').select('*').eq('id_loja', lojaId).single()
@@ -207,7 +185,6 @@ export default function Admin() {
       
       if (!usuario || !loja) throw new Error('Usuário ou loja não encontrados');
       
-      // Criar associação
       const { error } = await supabase
         .from('loja_associada')
         .insert([{
@@ -235,67 +212,22 @@ export default function Admin() {
   };
 
   // ============================================================================
-  // 5. FUNÇÕES: UPLOAD DE LOGO (NOVO)
+  // 5. FUNÇÕES: MODAL DE DETALHES DA LOJA
   // ============================================================================
   
-  /**
-   * Faz upload da logo para o Supabase Storage e atualiza a loja
-   */
-  const handleUploadLogo = async (lojaId, file) => {
-    try {
-      setUploading(true);
-      setSelectedLojaForUpload(lojaId);
-      setError(null);
+  const handleOpenModal = (loja) => {
+    setSelectedLoja(loja);
+    setIsModalOpen(true);
+  };
 
-      // Validar arquivo
-      if (!file || !file.type.startsWith('image/')) {
-        throw new Error('Por favor, selecione uma imagem válida');
-      }
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedLoja(null);
+  };
 
-      if (file.size > 5 * 1024 * 1024) { // 5MB max
-        throw new Error('A imagem deve ter no máximo 5MB');
-      }
-
-      // Gerar nome único para o arquivo
-      const fileExt = file.name.split('.').pop();
-      const fileName = `logo_loja_${lojaId}_${Date.now()}.${fileExt}`;
-      const filePath = `logos/${fileName}`;
-
-      // Fazer upload para o Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('box')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true
-        });
-
-      if (uploadError) throw uploadError;
-
-      // Obter URL pública da imagem
-      const { data: { publicUrl } } = supabase.storage
-        .from('box')
-        .getPublicUrl(filePath);
-
-      // Atualizar a loja com a URL da logo
-      const { error: updateError } = await supabase
-        .from('lojas')
-        .update({ 
-          loja_logo: publicUrl,
-          data_atualizacao: new Date().toISOString()
-        })
-        .eq('id_loja', lojaId);
-
-      if (updateError) throw updateError;
-
-      setSuccess('Logo atualizada com sucesso!');
-      await loadLojas(); // Recarregar a lista
-      
-    } catch (err) {
-      setError('Erro ao fazer upload: ' + err.message);
-    } finally {
-      setUploading(false);
-      setSelectedLojaForUpload(null);
-    }
+  const handleLojaUpdate = () => {
+    setSuccess('Loja atualizada com sucesso!');
+    loadLojas();
   };
 
   // ============================================================================
@@ -354,15 +286,13 @@ export default function Admin() {
         {/* Conteúdo das abas */}
         <div className="mt-6">
           
-          {/* ================================================================== */}
-          {/* ABA: LOJAS (COM UPLOAD DE LOGO) */}
-          {/* ================================================================== */}
+          {/* ABA: LOJAS */}
           {activeTab === 'lojas' && (
             <div>
               <h2 className="text-xl font-semibold mb-4">Gerenciar Lojas</h2>
               
               {/* Formulário de criação de loja */}
-              <div className="bg-white p-4 rounded-lg shadow-md mb-4">
+              <div className="bg-white p-4 rounded-lg shadow-md mb-6">
                 <h3 className="text-lg font-medium mb-3">Criar Nova Loja</h3>
                 <form onSubmit={(e) => {
                   e.preventDefault();
@@ -385,7 +315,6 @@ export default function Admin() {
                     <input name="loja_perimetro_entrega" placeholder="Perímetro de Entrega" className="w-full px-3 py-2 border border-gray-300 rounded" />
                     <input name="cnpj" placeholder="CNPJ" className="w-full px-3 py-2 border border-gray-300 rounded" />
                     
-                    {/* Campo para logo na criação */}
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Logo da Loja (opcional)
@@ -411,76 +340,44 @@ export default function Admin() {
                 </form>
               </div>
 
-              {/* Listagem de lojas com botão de upload */}
+              {/* Lista simplificada de lojas */}
               <div>
-                <h3 className="text-lg font-medium mb-3">Lojas Cadastradas</h3>
+                <h3 className="text-lg font-medium mb-3">Lojas Cadastradas ({lojas.length})</h3>
                 {loading ? (
                   <div className="text-center py-4">Carregando...</div>
                 ) : (
-                  <div className="grid gap-4">
-                    {lojas.map(loja => (
-                      <div key={loja.id} className="bg-white p-4 rounded-lg shadow-md">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h4 className="font-semibold">{loja.loja_nome} ({loja.id_loja})</h4>
-                            <p className="text-gray-600">{loja.loja_endereco}</p>
-                            <p className="text-gray-600">{loja.loja_telefone}</p>
-                            <p className="text-gray-600">Perímetro: {loja.loja_perimetro_entrega}</p>
-                            
-                            {/* Exibir logo se existir */}
-                            {loja.loja_logo && (
-                              <div className="mt-2">
-                                <img 
-                                  src={loja.loja_logo} 
-                                  alt={`Logo ${loja.loja_nome}`}
-                                  className="h-16 w-auto object-contain border rounded"
-                                />
-                              </div>
-                            )}
-                            
-                            <span className={`inline-block px-2 py-1 rounded text-xs mt-2 ${
+                  <div className="bg-white rounded-lg shadow-md">
+                    <div className="grid grid-cols-1 divide-y">
+                      {lojas.map(loja => (
+                        <div key={loja.id} className="p-4 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <span className={`w-3 h-3 rounded-full ${
+                                loja.ativa ? 'bg-green-500' : 'bg-red-500'
+                              }`}></span>
+                              <button
+                                onClick={() => handleOpenModal(loja)}
+                                className="text-left text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                              >
+                                {loja.loja_nome} ({loja.id_loja})
+                              </button>
+                            </div>
+                            <span className={`px-2 py-1 rounded text-xs ${
                               loja.ativa ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                             }`}>
                               {loja.ativa ? 'Ativa' : 'Inativa'}
                             </span>
                           </div>
-                          
-                          {/* Botão de upload de logo */}
-                          <div className="ml-4 flex flex-col items-center">
-                            <label className="cursor-pointer bg-blue-500 text-white px-3 py-2 rounded text-sm hover:bg-blue-600 transition-colors mb-2">
-                              <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                              </svg>
-                              Alterar Logo
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => {
-                                  const file = e.target.files[0];
-                                  if (file) handleUploadLogo(loja.id_loja, file);
-                                }}
-                                disabled={uploading}
-                              />
-                            </label>
-                            
-                            {uploading && selectedLojaForUpload === loja.id_loja && (
-                              <div className="text-blue-500 text-xs">Enviando...</div>
-                            )}
-                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* ================================================================== */}
           {/* ABA: USUÁRIOS PENDENTES */}
-          {/* ================================================================== */}
           {activeTab === 'usuarios' && (
             <div>
               <h2 className="text-xl font-semibold mb-4">Usuários Pendentes</h2>
@@ -509,9 +406,7 @@ export default function Admin() {
             </div>
           )}
 
-          {/* ================================================================== */}
           {/* ABA: ASSOCIAÇÕES */}
-          {/* ================================================================== */}
           {activeTab === 'associacoes' && (
             <div>
               <h2 className="text-xl font-semibold mb-4">Associações Ativas</h2>
@@ -535,6 +430,14 @@ export default function Admin() {
             </div>
           )}
         </div>
+
+        {/* Modal de detalhes da loja */}
+        <DetalheLojaModal
+          loja={selectedLoja}
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          onUpdate={handleLojaUpdate}
+        />
       </div>
     </RouteGuard>
   );
