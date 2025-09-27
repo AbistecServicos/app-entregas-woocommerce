@@ -71,171 +71,389 @@ export default function Relatorios() {
     }
   };
 
-  // ==========================================================================
-  // 6. RELATÓRIOS PARA ADMIN - SIMPLIFICADO
-  // ==========================================================================
-  const carregarRelatoriosAdmin = async () => {
-    const { data, error } = await supabase
-      .from('loja_associada')
-      .select(`
-        id_loja,
-        loja_nome,
-        semana_entregue,
-        semana_cancelado,
-        mes_entregue,
-        mes_cancelado,
-        ano_entregue,
-        ano_cancelado,
-        frete_pago_semana,
-        frete_pago_mes,
-        frete_pago_ano,
-        usuarios:uid_usuario(nome_completo, email)
-      `)
-      .eq('status_vinculacao', 'ativo')
-      .eq('funcao', 'entregador');
+// ==========================================================================
+// 6. RELATÓRIOS PARA ADMIN - CORRIGIDO (SEM COMENTÁRIOS)
+// ==========================================================================
+const carregarRelatoriosAdmin = async () => {
+  // CONSULTA CORRIGIDA - SEM COMENTÁRIOS NA QUERY
+  const { data, error } = await supabase
+    .from('loja_associada')
+    .select(`
+      id_loja,
+      loja_nome,
+      uid_usuario,
+      nome_completo,
+      email_usuario,
+      total_entregue_hoje,
+      total_cancelado_hoje,
+      total_frete_pago_hoje,
+      semana_entregue,
+      semana_cancelado,
+      mes_entregue,
+      mes_cancelado,
+      ano_entregue,
+      ano_cancelado,
+      frete_pago_semana,
+      frete_pago_mes,
+      frete_pago_ano
+    `)
+    .eq('status_vinculacao', 'ativo')
+    .eq('funcao', 'entregador');
 
-    if (error) throw error;
+  if (error) throw error;
 
-    const lojasCorrigidas = data.map(loja => ({
-      ...loja,
-      loja_nome: corrigirNomeLoja(loja.id_loja, loja.loja_nome)
-    }));
+  console.log('DEBUG - Dados do admin:', data);
 
-    const totalEntregas = lojasCorrigidas.reduce((sum, item) => sum + (item[`${periodo}_entregue`] || 0), 0);
-    const totalCancelamentos = lojasCorrigidas.reduce((sum, item) => sum + (item[`${periodo}_cancelado`] || 0), 0);
-    const totalFretesPagos = lojasCorrigidas.reduce((sum, item) => sum + (item[`frete_pago_${periodo}`] || 0), 0);
-    const totalEntregadores = new Set(lojasCorrigidas.map(item => item.uid_usuario)).size;
-
-    return {
-      tipo: 'admin',
-      totalEntregas,
-      totalCancelamentos,
-      totalFretesPagos,
-      totalEntregadores,
-      lojas: lojasCorrigidas,
-      periodo
-    };
+  // FUNÇÕES AUXILIARES PARA OBTER DADOS CORRETOS POR PERÍODO
+  const getEntregas = (item) => {
+    switch (periodo) {
+      case 'dia': return item.total_entregue_hoje || 0;
+      case 'semana': return item.semana_entregue || 0;
+      case 'mes': return item.mes_entregue || 0;
+      case 'ano': return item.ano_entregue || 0;
+      default: return 0;
+    }
   };
 
-  // ==========================================================================
-  // 7. RELATÓRIOS PARA GERENTE - SIMPLIFICADO
-  // ==========================================================================
-  const carregarRelatoriosGerente = async () => {
-    if (!userLojas || userLojas.length === 0) return null;
-
-    const idLoja = userLojas[0].id_loja;
-    const nomeLojaCorrigido = corrigirNomeLoja(idLoja, userLojas[0].loja_nome);
-
-    const { data, error } = await supabase
-      .from('loja_associada')
-      .select(`
-        nome_completo,
-        email_usuario,
-        semana_entregue,
-        semana_cancelado,
-        mes_entregue,
-        mes_cancelado,
-        ano_entregue,
-        ano_cancelado,
-        frete_pago_semana,
-        frete_pago_mes,
-        frete_pago_ano,
-        veiculo
-      `)
-      .eq('id_loja', idLoja)
-      .eq('status_vinculacao', 'ativo')
-      .eq('funcao', 'entregador')
-      .order('mes_entregue', { ascending: false });
-
-    if (error) throw error;
-
-    const totalEntregas = data.reduce((sum, item) => sum + (item[`${periodo}_entregue`] || 0), 0);
-    const totalCancelamentos = data.reduce((sum, item) => sum + (item[`${periodo}_cancelado`] || 0), 0);
-    const totalFretesPagos = data.reduce((sum, item) => sum + (item[`frete_pago_${periodo}`] || 0), 0);
-    const totalEntregadores = new Set(data.map(item => item.uid_usuario)).size;
-
-    return {
-      tipo: 'gerente',
-      totalEntregas,
-      totalCancelamentos,
-      totalFretesPagos,
-      totalEntregadores: data.length,
-      entregadores: data,
-      loja: nomeLojaCorrigido,
-      periodo
-    };
+  const getCancelamentos = (item) => {
+    switch (periodo) {
+      case 'dia': return item.total_cancelado_hoje || 0;
+      case 'semana': return item.semana_cancelado || 0;
+      case 'mes': return item.mes_cancelado || 0;
+      case 'ano': return item.ano_cancelado || 0;
+      default: return 0;
+    }
   };
 
-  // ==========================================================================
-  // 8. RELATÓRIOS PARA ENTREGADOR - ATUALIZADO
-  // ==========================================================================
-  const carregarRelatoriosEntregador = async () => {
-    // DADOS DO DIA (HOJE) - Vem da entregas_diarias_entregadores
-    const hoje = new Date().toISOString().split('T')[0];
-    const { data: dadosHoje, error: errorHoje } = await supabase
-      .from('entregas_diarias_entregadores')
-      .select(`
-        id_loja,
-        entregues,
-        cancelados,
-        total_frete
-      `)
-      .eq('uid_usuario', userProfile?.uid)
-      .eq('data', hoje);
-
-    if (errorHoje) console.error('Erro ao carregar dados do dia:', errorHoje);
-
-    // Calcular totais do dia
-    const entreguesHoje = dadosHoje?.reduce((sum, item) => sum + (item.entregues || 0), 0) || 0;
-    const cancelamentosHoje = dadosHoje?.reduce((sum, item) => sum + (item.cancelados || 0), 0) || 0;
-    const freteOferecidoHoje = dadosHoje?.reduce((sum, item) => sum + (item.total_frete || 0), 0) || 0;
-
-    // DADOS ACUMULADOS (SEMANA/MÊS/ANO) - Vem da loja_associada
-    const { data: dadosAcumulados, error: errorAcumulado } = await supabase
-      .from('loja_associada')
-      .select(`
-        id_loja,
-        loja_nome,
-        semana_entregue,
-        semana_cancelado,
-        mes_entregue,
-        mes_cancelado,
-        ano_entregue,
-        ano_cancelado,
-        frete_pago_semana,
-        frete_pago_mes,
-        frete_pago_ano
-      `)
-      .eq('uid_usuario', userProfile?.uid)
-      .eq('status_vinculacao', 'ativo');
-
-    if (errorAcumulado) throw errorAcumulado;
-
-    const lojasCorrigidas = dadosAcumulados.map(loja => ({
-      ...loja,
-      loja_nome: corrigirNomeLoja(loja.id_loja, loja.loja_nome)
-    }));
-
-    const totalEntregas = lojasCorrigidas.reduce((sum, item) => sum + (item[`${periodo}_entregue`] || 0), 0);
-    const totalCancelamentos = lojasCorrigidas.reduce((sum, item) => sum + (item[`${periodo}_cancelado`] || 0), 0);
-    const totalFretesPagos = periodo === 'dia' ? 0 : lojasCorrigidas.reduce((sum, item) => sum + (item[`frete_pago_${periodo}`] || 0), 0);
-
-    return {
-      tipo: 'entregador',
-      // Dados do dia
-      entreguesHoje,
-      cancelamentosHoje,
-      freteOferecidoHoje,
-      dadosHojePorLoja: dadosHoje || [],
-      
-      // Dados acumulados
-      totalEntregas,
-      totalCancelamentos,
-      totalFretesPagos,
-      lojas: lojasCorrigidas,
-      periodo
-    };
+  const getFretes = (item) => {
+    switch (periodo) {
+      case 'dia': return parseFloat(item.total_frete_pago_hoje || 0);
+      case 'semana': return parseFloat(item.frete_pago_semana || 0);
+      case 'mes': return parseFloat(item.frete_pago_mes || 0);
+      case 'ano': return parseFloat(item.frete_pago_ano || 0);
+      default: return 0;
+    }
   };
+
+  // ==================================================
+  // 1. AGRUPAR DADOS POR LOJA
+  // ==================================================
+  const lojasAgrupadas = data.reduce((acc, item) => {
+    if (!acc[item.id_loja]) {
+      acc[item.id_loja] = {
+        id_loja: item.id_loja,
+        loja_nome: corrigirNomeLoja(item.id_loja, item.loja_nome),
+        entregadores: [],
+        // Inicializar totais da loja
+        total_entregas: 0,
+        total_cancelamentos: 0,
+        total_fretes: 0
+      };
+    }
+    
+    // Somar totais da loja
+    acc[item.id_loja].total_entregas += getEntregas(item);
+    acc[item.id_loja].total_cancelamentos += getCancelamentos(item);
+    acc[item.id_loja].total_fretes += getFretes(item);
+    
+    // Adicionar entregador
+    acc[item.id_loja].entregadores.push({
+      uid_usuario: item.uid_usuario,
+      nome_completo: item.nome_completo,
+      email_usuario: item.email_usuario,
+      // Dados específicos do entregador
+      entregas: getEntregas(item),
+      cancelamentos: getCancelamentos(item),
+      frete_pago: getFretes(item)
+    });
+
+    return acc;
+  }, {});
+
+  const lojasCorrigidas = Object.values(lojasAgrupadas);
+  
+  // ==================================================
+  // 2. CALCULAR TOTAIS GERAIS (SISTEMA COMPLETO)
+  // ==================================================
+  const totalEntregas = lojasCorrigidas.reduce((sum, loja) => sum + loja.total_entregas, 0);
+  const totalCancelamentos = lojasCorrigidas.reduce((sum, loja) => sum + loja.total_cancelamentos, 0);
+  const totalFretesPagos = lojasCorrigidas.reduce((sum, loja) => sum + loja.total_fretes, 0);
+  const totalEntregadores = new Set(data.map(item => item.uid_usuario)).size;
+
+  console.log('DEBUG - Admin - Totais gerais:', { 
+    totalEntregas, 
+    totalCancelamentos, 
+    totalFretesPagos,
+    totalEntregadores 
+  });
+
+  return {
+    tipo: 'admin',
+    
+    // ================= TOTAIS GERAIS =================
+    totalEntregas,           // SOMA de todo o sistema
+    totalCancelamentos,      // SOMA de todo o sistema  
+    totalFretesPagos,        // SOMA de todo o sistema
+    totalEntregadores,       // Total de entregadores únicos
+    
+    // ================= DADOS POR LOJA =================
+    lojas: lojasCorrigidas,  // Dados agrupados por loja
+    
+    periodo
+  };
+};
+
+// ==========================================================================
+// 7. RELATÓRIOS PARA GERENTE - CORRIGIDO (SEM COMENTÁRIOS)
+// ==========================================================================
+const carregarRelatoriosGerente = async () => {
+  if (!userLojas || userLojas.length === 0) return null;
+
+  const idLoja = userLojas[0].id_loja;
+  const nomeLojaCorrigido = corrigirNomeLoja(idLoja, userLojas[0].loja_nome);
+
+  // CONSULTA CORRIGIDA - SEM COMENTÁRIOS NA QUERY
+  const { data, error } = await supabase
+    .from('loja_associada')
+    .select(`
+      uid_usuario,
+      nome_completo,
+      email_usuario,
+      veiculo,
+      total_entregue_hoje,
+      total_cancelado_hoje,
+      total_frete_pago_hoje,
+      semana_entregue,
+      semana_cancelado,
+      mes_entregue,
+      mes_cancelado,
+      ano_entregue,
+      ano_cancelado,
+      frete_pago_semana,
+      frete_pago_mes,
+      frete_pago_ano
+    `)
+    .eq('id_loja', idLoja)
+    .eq('status_vinculacao', 'ativo')
+    .eq('funcao', 'entregador')
+    .order('mes_entregue', { ascending: false });
+
+  if (error) throw error;
+
+  console.log('DEBUG - Dados do gerente:', data);
+
+  // FUNÇÕES AUXILIARES PARA OBTER DADOS CORRETOS POR PERÍODO
+  const getEntregas = (item) => {
+    switch (periodo) {
+      case 'dia': return item.total_entregue_hoje || 0;
+      case 'semana': return item.semana_entregue || 0;
+      case 'mes': return item.mes_entregue || 0;
+      case 'ano': return item.ano_entregue || 0;
+      default: return 0;
+    }
+  };
+
+  const getCancelamentos = (item) => {
+    switch (periodo) {
+      case 'dia': return item.total_cancelado_hoje || 0;
+      case 'semana': return item.semana_cancelado || 0;
+      case 'mes': return item.mes_cancelado || 0;
+      case 'ano': return item.ano_cancelado || 0;
+      default: return 0;
+    }
+  };
+
+  const getFretes = (item) => {
+    switch (periodo) {
+      case 'dia': return parseFloat(item.total_frete_pago_hoje || 0);
+      case 'semana': return parseFloat(item.frete_pago_semana || 0);
+      case 'mes': return parseFloat(item.frete_pago_mes || 0);
+      case 'ano': return parseFloat(item.frete_pago_ano || 0);
+      default: return 0;
+    }
+  };
+
+  // ==================================================
+  // 1. DADOS PARA OS CARDS (SOMA DE TODOS OS ENTREGADORES)
+  // ==================================================
+  
+  // SOMA de todos os entregadores para o PERÍODO SELECIONADO
+  const totalEntregas = data.reduce((sum, item) => sum + getEntregas(item), 0);
+  const totalCancelamentos = data.reduce((sum, item) => sum + getCancelamentos(item), 0);
+  const totalFretesPagos = data.reduce((sum, item) => sum + getFretes(item), 0);
+
+  // ==================================================
+  // 2. DADOS PARA A LISTA (DETALHES POR ENTREGADOR)
+  // ==================================================
+  
+  // Preparar dados INDIVIDUAIS por entregador
+  const entregadores = data.map(item => ({
+    uid_usuario: item.uid_usuario,
+    nome_completo: item.nome_completo,
+    email_usuario: item.email_usuario,
+    veiculo: item.veiculo,
+    // Dados específicos do período para ESTE entregador
+    entregas: getEntregas(item),
+    cancelamentos: getCancelamentos(item),
+    frete_pago: getFretes(item)
+  }));
+
+  console.log('DEBUG - Gerente - Soma dos cards:', { 
+    totalEntregas, 
+    totalCancelamentos, 
+    totalFretesPagos 
+  });
+  
+  console.log('DEBUG - Gerente - Dados por entregador:', entregadores);
+
+  return {
+    tipo: 'gerente',
+    
+    // ================= CARDS DE CIMA =================
+    // SOMA de todos os entregadores para os cards principais
+    totalEntregas,           // SOMA para o período selecionado
+    totalCancelamentos,      // SOMA para o período selecionado  
+    totalFretesPagos,        // SOMA para o período selecionado
+    totalEntregadores: data.length, // Quantidade de entregadores
+    
+    // ================= LISTA DE BAIXO =================
+    // Dados INDIVIDUAIS por entregador para a lista
+    entregadores,
+    
+    loja: nomeLojaCorrigido,
+    periodo
+  };
+};
+// ==========================================================================
+// 8. RELATÓRIOS PARA ENTREGADOR - CORRIGIDO (SOMA + DETALHES)
+// ==========================================================================
+const carregarRelatoriosEntregador = async () => {
+  // CONSULTA ÚNICA - tudo da loja_associada
+  const { data, error } = await supabase
+    .from('loja_associada')
+    .select(`
+      id_loja,
+      loja_nome,
+      total_entregue_hoje,
+      total_cancelado_hoje,
+      total_frete_pago_hoje,
+      semana_entregue,
+      semana_cancelado,
+      mes_entregue,
+      mes_cancelado,
+      ano_entregue,
+      ano_cancelado,
+      frete_pago_semana,
+      frete_pago_mes,
+      frete_pago_ano
+    `)
+    .eq('uid_usuario', userProfile?.uid)
+    .eq('status_vinculacao', 'ativo');
+
+  if (error) throw error;
+
+  console.log('DEBUG - Dados brutos por loja:', data);
+
+  // FUNÇÕES AUXILIARES PARA OBTER DADOS CORRETOS POR PERÍODO
+  const getEntregas = (item) => {
+    switch (periodo) {
+      case 'dia': return item.total_entregue_hoje || 0;
+      case 'semana': return item.semana_entregue || 0;
+      case 'mes': return item.mes_entregue || 0;
+      case 'ano': return item.ano_entregue || 0;
+      default: return 0;
+    }
+  };
+
+  const getCancelamentos = (item) => {
+    switch (periodo) {
+      case 'dia': return item.total_cancelado_hoje || 0;
+      case 'semana': return item.semana_cancelado || 0;
+      case 'mes': return item.mes_cancelado || 0;
+      case 'ano': return item.ano_cancelado || 0;
+      default: return 0;
+    }
+  };
+
+  const getFretes = (item) => {
+    switch (periodo) {
+      case 'dia': return parseFloat(item.total_frete_pago_hoje || 0);
+      case 'semana': return parseFloat(item.frete_pago_semana || 0);
+      case 'mes': return parseFloat(item.frete_pago_mes || 0);
+      case 'ano': return parseFloat(item.frete_pago_ano || 0);
+      default: return 0;
+    }
+  };
+
+  // ==================================================
+  // 1. DADOS PARA OS CARDS (SOMA DE TODAS AS LOJAS)
+  // ==================================================
+  
+  // SOMA de todas as lojas para o PERÍODO SELECIONADO
+  const totalEntregas = data.reduce((sum, item) => sum + getEntregas(item), 0);
+  const totalCancelamentos = data.reduce((sum, item) => sum + getCancelamentos(item), 0);
+  const totalFretesPagos = data.reduce((sum, item) => sum + getFretes(item), 0);
+
+  // SOMA de todas as lojas para HOJE (específico)
+  const entreguesHoje = data.reduce((sum, item) => sum + (item.total_entregue_hoje || 0), 0);
+  const cancelamentosHoje = data.reduce((sum, item) => sum + (item.total_cancelado_hoje || 0), 0);
+  const freteOferecidoHoje = data.reduce((sum, item) => sum + parseFloat(item.total_frete_pago_hoje || 0), 0);
+
+  // ==================================================
+  // 2. DADOS PARA A LISTA (DETALHES POR LOJA)
+  // ==================================================
+  
+  // Preparar dados INDIVIDUAIS por loja para o período selecionado
+  const dadosPorLojaPeriodo = data.map(item => ({
+    id_loja: item.id_loja,
+    loja_nome: corrigirNomeLoja(item.id_loja, item.loja_nome),
+    entregues: getEntregas(item),      // Dados desta loja específica
+    cancelamentos: getCancelamentos(item), // Dados desta loja específica
+    frete_pago: getFretes(item)        // Dados desta loja específica
+  }));
+
+  // Preparar dados INDIVIDUAIS por loja para HOJE
+  const dadosHojePorLoja = data.map(item => ({
+    id_loja: item.id_loja,
+    loja_nome: corrigirNomeLoja(item.id_loja, item.loja_nome),
+    entregues: item.total_entregue_hoje || 0,        // Dados HOJE desta loja
+    cancelamentos: item.total_cancelado_hoje || 0,   // Dados HOJE desta loja
+    total_frete: parseFloat(item.total_frete_pago_hoje || 0) // Dados HOJE desta loja
+  }));
+
+  console.log('DEBUG - Soma dos cards:', { 
+    totalEntregas, 
+    totalCancelamentos, 
+    totalFretesPagos,
+    entreguesHoje,
+    cancelamentosHoje,
+    freteOferecidoHoje
+  });
+  
+  console.log('DEBUG - Dados por loja:', dadosPorLojaPeriodo);
+
+  return {
+    tipo: 'entregador',
+    
+    // ================= CARDS DE CIMA =================
+    // SOMA de todas as lojas para os cards principais
+    totalEntregas,           // SOMA para o período selecionado
+    totalCancelamentos,      // SOMA para o período selecionado  
+    totalFretesPagos,        // SOMA para o período selecionado
+    
+    // Dados específicos de HOJE (sempre mostra soma de hoje)
+    entreguesHoje,           // SOMA de HOJE de todas as lojas
+    cancelamentosHoje,       // SOMA de HOJE de todas as lojas
+    freteOferecidoHoje,      // SOMA de HOJE de todas as lojas
+    
+    // ================= LISTA DE BAIXO =================
+    // Dados INDIVIDUAIS por loja para a lista
+    dadosHojePorLoja,        // Dados individuais por loja (HOJE)
+    lojas: dadosPorLojaPeriodo, // Dados individuais por loja (período selecionado)
+    
+    periodo
+  };
+};
 
   // ==========================================================================
   // 9. COMPONENTE DE CARREGAMENTO
@@ -304,115 +522,56 @@ function RenderRelatoriosEntregador({ dados, periodo }) {
 
   return (
     <>
-      {/* ESTATÍSTICAS DE HOJE */}
+      {/* ESTATÍSTICAS DE HOJE - CARDS COM SOMA */}
       <div className="bg-blue-50 p-6 rounded-lg shadow-md mb-8">
-        <h2 className="text-xl font-semibold mb-4 text-blue-800">🕒 Estatísticas de Hoje</h2>
+        <h2 className="text-xl font-semibold mb-4 text-blue-800">
+          {periodo === 'dia' ? '🕒 Estatísticas de Hoje' : 
+           periodo === 'semana' ? '📅 Estatísticas da Semana' :
+           periodo === 'mes' ? '📊 Estatísticas do Mês' : '📈 Estatísticas do Ano'}
+        </h2>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div className="bg-white p-4 rounded-lg shadow-sm text-center">
-            <div className="text-2xl font-bold text-blue-600 mb-1">{dados.entreguesHoje || 0}</div>
-            <div className="text-sm text-gray-600">Entregas Hoje</div>
+            <div className="text-2xl font-bold text-blue-600 mb-1">
+              {periodo === 'dia' ? dados.entreguesHoje : dados.totalEntregas}
+            </div>
+            <div className="text-sm text-gray-600">
+              {periodo === 'dia' ? 'Entregas Hoje' : 'Total de Entregas'}
+            </div>
           </div>
           
           <div className="bg-white p-4 rounded-lg shadow-sm text-center">
-            <div className="text-2xl font-bold text-red-600 mb-1">{dados.cancelamentosHoje || 0}</div>
+            <div className="text-2xl font-bold text-red-600 mb-1">
+              {periodo === 'dia' ? dados.cancelamentosHoje : dados.totalCancelamentos}
+            </div>
             <div className="text-sm text-gray-600">Cancelamentos</div>
           </div>
           
           <div className="bg-white p-4 rounded-lg shadow-sm text-center">
-            <div className="text-2xl font-bold text-purple-600 mb-1">
-              {new Date().toLocaleDateString('pt-BR')}
+            <div className="text-2xl font-bold text-green-600 mb-1">
+              R$ {((periodo === 'dia' ? dados.freteOferecidoHoje : dados.totalFretesPagos) || 0).toFixed(2)}
             </div>
-            <div className="text-sm text-gray-600">Data</div>
+            <div className="text-sm text-gray-600">
+              {periodo === 'dia' ? 'Frete Oferecido' : 'Frete Pago'}
+            </div>
           </div>
         </div>
-
-        {/* DETALHES POR LOJA (HOJE) - FORMATO COMPACTO COM TABELA */}
-        {dados.dadosHojePorLoja && dados.dadosHojePorLoja.length > 0 && (
-          <div className="mt-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Detalhes por Loja (Hoje):</h3>
-            
-            <div className="bg-white rounded-lg border overflow-hidden">
-              {/* CABEÇALHO DA TABELA */}
-              <div className="grid grid-cols-3 bg-gray-100 px-4 py-2 text-xs font-semibold text-gray-600 border-b">
-                <div>Loja</div>
-                <div className="text-center">ENT</div>
-                <div className="text-center">CAN</div>
-              </div>
-              
-              {/* CORPO DA TABELA COM SCROLL */}
-              <div className="max-h-40 overflow-y-auto">
-                {dados.dadosHojePorLoja.map((item, index) => {
-                  // Encontrar o nome correto da loja baseado no id_loja
-                  const nomeLoja = dados.lojas?.find(loja => loja.id_loja === item.id_loja)?.loja_nome || `Loja ${item.id_loja}`;
-                  
-                  return (
-                    <div key={index} className="grid grid-cols-3 px-4 py-2 text-xs border-b last:border-b-0 hover:bg-gray-50">
-                      <div className="truncate pr-2">
-                        {nomeLoja} ({item.id_loja})
-                      </div>
-                      <div className="text-center font-medium text-green-600">
-                        {item.entregues || 0}
-                      </div>
-                      <div className="text-center font-medium text-red-600">
-                        {item.cancelados || 0}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* ESTATÍSTICAS ACUMULADAS */}
+      {/* LISTA INDIVIDUAL POR LOJA */}
       <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-        <h2 className="text-xl font-semibold mb-4">
-          {periodo === 'dia' ? 'Estatísticas de Hoje' : 
-           periodo === 'semana' ? 'Estatísticas da Semana' :
-           periodo === 'mes' ? 'Estatísticas do Mês' : 'Estatísticas do Ano'}
-        </h2>
-
-        {/* CARDS SIMPLIFICADOS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-green-50 p-6 rounded-lg shadow-sm text-center">
-            <div className="text-3xl font-bold text-green-600 mb-2">{dados.totalEntregas || 0}</div>
-            <div className="text-gray-600">Total de Entregas</div>
-          </div>
-          
-          <div className="bg-red-50 p-6 rounded-lg shadow-sm text-center">
-            <div className="text-3xl font-bold text-red-600 mb-2">{dados.totalCancelamentos || 0}</div>
-            <div className="text-gray-600">Cancelamentos</div>
-          </div>
-          
-          <div className="bg-blue-50 p-6 rounded-lg shadow-sm text-center">
-            <div className="text-3xl font-bold text-blue-600 mb-2">
-              R$ {(dados.totalFretesPagos || 0).toFixed(2)}
-            </div>
-            <div className="text-gray-600">Frete Pago</div>
-          </div>
-        </div>
-
-        {/* LISTA COMPACTA POR LOJA */}
         <h3 className="text-lg font-medium mb-4">🏪 Desempenho por Loja</h3>
         
         {dados.lojas && dados.lojas.length > 0 ? (
           <div className="space-y-3">
-            {dados.lojas.map((loja, index) => {
-              const entregas = loja[`${periodo}_entregue`] || 0;
-              const cancelamentos = loja[`${periodo}_cancelado`] || 0;
-              const fretePago = periodo === 'dia' ? 0 : (loja[`frete_pago_${periodo}`] || 0);
-              
-              return (
-                <div key={index} className="p-3 border rounded-lg bg-gray-50 grid grid-cols-4 gap-4 text-sm">
-                  <div className="font-medium">{loja.loja_nome}</div>
-                  <div>📦 {entregas} entr.</div>
-                  <div>❌ {cancelamentos} canc.</div>
-                  <div className="font-semibold text-green-600">R$ {fretePago.toFixed(2)}</div>
-                </div>
-              );
-            })}
+            {dados.lojas.map((loja, index) => (
+              <div key={index} className="p-3 border rounded-lg bg-gray-50 grid grid-cols-4 gap-4 text-sm">
+                <div className="font-medium">{loja.loja_nome}</div>
+                <div>📦 {loja.entregues || 0} entr.</div>
+                <div>❌ {loja.cancelamentos || 0} canc.</div>
+                <div className="font-semibold text-green-600">R$ {(loja.frete_pago || 0).toFixed(2)}</div>
+              </div>
+            ))}
           </div>
         ) : (
           <p className="text-gray-500 text-center py-4">Nenhum dado encontrado</p>
@@ -423,7 +582,7 @@ function RenderRelatoriosEntregador({ dados, periodo }) {
 }
 
 // ============================================================================
-// COMPONENTE: RENDERIZAÇÃO GERENTE
+// COMPONENTE: RENDERIZAÇÃO GERENTE - CORRIGIDO
 // ============================================================================
 function RenderRelatoriosGerente({ dados, periodo }) {
   if (!dados) return null;
@@ -431,15 +590,18 @@ function RenderRelatoriosGerente({ dados, periodo }) {
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <h2 className="text-xl font-semibold mb-4">
-        {periodo === 'dia' ? 'Estatísticas de Hoje' : 
-         periodo === 'semana' ? 'Estatísticas da Semana' :
-         periodo === 'mes' ? 'Estatísticas do Mês' : 'Estatísticas do Ano'} - {dados.loja}
+        {periodo === 'dia' ? '📊 Estatísticas de Hoje' : 
+         periodo === 'semana' ? '📅 Estatísticas da Semana' :
+         periodo === 'mes' ? '📈 Estatísticas do Mês' : '🎯 Estatísticas do Ano'} - {dados.loja}
       </h2>
 
+      {/* CARDS COM SOMA DE TODOS OS ENTREGADORES */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-green-50 p-6 rounded-lg shadow-sm text-center">
           <div className="text-3xl font-bold text-green-600 mb-2">{dados.totalEntregas || 0}</div>
-          <div className="text-gray-600">Total de Entregas</div>
+          <div className="text-gray-600">
+            {periodo === 'dia' ? 'Entregas Hoje' : 'Total de Entregas'}
+          </div>
         </div>
         
         <div className="bg-red-50 p-6 rounded-lg shadow-sm text-center">
@@ -451,44 +613,60 @@ function RenderRelatoriosGerente({ dados, periodo }) {
           <div className="text-3xl font-bold text-blue-600 mb-2">
             R$ {(dados.totalFretesPagos || 0).toFixed(2)}
           </div>
-          <div className="text-gray-600">Frete Pago</div>
+          <div className="text-gray-600">
+            {periodo === 'dia' ? 'Frete Oferecido' : 'Frete Pago'}
+          </div>
         </div>
         
         <div className="bg-purple-50 p-6 rounded-lg shadow-sm text-center">
           <div className="text-3xl font-bold text-purple-600 mb-2">{dados.totalEntregadores || 0}</div>
-          <div className="text-gray-600">Entregadores</div>
+          <div className="text-gray-600">Entregadores Ativos</div>
         </div>
       </div>
 
-      {/* DETALHES POR ENTREGADOR */}
+      {/* DETALHES INDIVIDUAIS POR ENTREGADOR */}
       <h3 className="text-lg font-medium mb-4">👥 Desempenho por Entregador</h3>
       
       {dados.entregadores && dados.entregadores.length > 0 ? (
         <div className="space-y-4">
           {dados.entregadores.map((entregador, index) => {
-            const entregas = entregador[`${periodo}_entregue`] || 0;
-            const cancelamentos = entregador[`${periodo}_cancelado`] || 0;
-            const fretePago = periodo === 'dia' ? 0 : (entregador[`frete_pago_${periodo}`] || 0);
+            // ✅ CORRETO: Usa os campos que já vieram formatados da função
+            const entregas = entregador.entregas || 0;
+            const cancelamentos = entregador.cancelamentos || 0;
+            const fretePago = entregador.frete_pago || 0;
             
             return (
               <div key={index} className="p-4 border rounded-lg bg-gray-50 grid grid-cols-5 gap-4 text-sm">
-                <div className="font-medium col-span-2">{entregador.nome_completo}</div>
-                <div>📦 {entregas} entr.</div>
-                <div>❌ {cancelamentos} canc.</div>
-                <div className="font-semibold text-green-600">R$ {fretePago.toFixed(2)}</div>
+                <div className="font-medium col-span-2">
+                  {entregador.nome_completo}
+                  {entregador.veiculo && (
+                    <span className="text-xs text-gray-500 block">🚗 {entregador.veiculo}</span>
+                  )}
+                </div>
+                <div className="text-center">
+                  <span className="text-green-600 font-semibold">📦 {entregas}</span>
+                  <div className="text-xs text-gray-500">entregas</div>
+                </div>
+                <div className="text-center">
+                  <span className="text-red-600 font-semibold">❌ {cancelamentos}</span>
+                  <div className="text-xs text-gray-500">cancel.</div>
+                </div>
+                <div className="text-center font-semibold text-green-600">
+                  R$ {fretePago.toFixed(2)}
+                </div>
               </div>
             );
           })}
         </div>
       ) : (
-        <p className="text-gray-500 text-center py-4">Nenhum entregador encontrado</p>
+        <p className="text-gray-500 text-center py-4">Nenhum entregador encontrado nesta loja</p>
       )}
     </div>
   );
 }
 
 // ============================================================================
-// COMPONENTE: RENDERIZAÇÃO ADMIN
+// COMPONENTE: RENDERIZAÇÃO ADMIN - CORRIGIDO
 // ============================================================================
 function RenderRelatoriosAdmin({ dados, periodo }) {
   if (!dados) return null;
@@ -496,15 +674,18 @@ function RenderRelatoriosAdmin({ dados, periodo }) {
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <h2 className="text-xl font-semibold mb-4">
-        {periodo === 'dia' ? 'Estatísticas de Hoje' : 
-         periodo === 'semana' ? 'Estatísticas da Semana' :
-         periodo === 'mes' ? 'Estatísticas do Mês' : 'Estatísticas do Ano'} - Sistema Completo
+        {periodo === 'dia' ? '📊 Estatísticas de Hoje' : 
+         periodo === 'semana' ? '📅 Estatísticas da Semana' :
+         periodo === 'mes' ? '📈 Estatísticas do Mês' : '🎯 Estatísticas do Ano'} - Sistema Completo
       </h2>
 
+      {/* CARDS COM TOTAIS GERAIS DO SISTEMA */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-green-50 p-6 rounded-lg shadow-sm text-center">
           <div className="text-3xl font-bold text-green-600 mb-2">{dados.totalEntregas || 0}</div>
-          <div className="text-gray-600">Total de Entregas</div>
+          <div className="text-gray-600">
+            {periodo === 'dia' ? 'Entregas Hoje' : 'Total de Entregas'}
+          </div>
         </div>
         
         <div className="bg-red-50 p-6 rounded-lg shadow-sm text-center">
@@ -516,12 +697,14 @@ function RenderRelatoriosAdmin({ dados, periodo }) {
           <div className="text-3xl font-bold text-blue-600 mb-2">
             R$ {(dados.totalFretesPagos || 0).toFixed(2)}
           </div>
-          <div className="text-gray-600">Frete Pago</div>
+          <div className="text-gray-600">
+            {periodo === 'dia' ? 'Frete Oferecido' : 'Frete Pago'}
+          </div>
         </div>
         
         <div className="bg-purple-50 p-6 rounded-lg shadow-sm text-center">
           <div className="text-3xl font-bold text-purple-600 mb-2">{dados.totalEntregadores || 0}</div>
-          <div className="text-gray-600">Entregadores</div>
+          <div className="text-gray-600">Entregadores Ativos</div>
         </div>
       </div>
 
@@ -530,22 +713,46 @@ function RenderRelatoriosAdmin({ dados, periodo }) {
       
       {dados.lojas && dados.lojas.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {dados.lojas.map((loja, index) => {
-            const entregas = loja[`${periodo}_entregue`] || 0;
-            const cancelamentos = loja[`${periodo}_cancelado`] || 0;
-            const fretePago = periodo === 'dia' ? 0 : (loja[`frete_pago_${periodo}`] || 0);
-            
-            return (
-              <div key={index} className="p-4 border rounded-lg bg-gray-50">
-                <h4 className="font-medium mb-2">{loja.loja_nome}</h4>
-                <div className="grid grid-cols-3 gap-2 text-sm">
-                  <div>📦 {entregas} entr.</div>
-                  <div>❌ {cancelamentos} canc.</div>
-                  <div className="font-semibold text-green-600">R$ {fretePago.toFixed(2)}</div>
+          {dados.lojas.map((loja, index) => (
+            <div key={index} className="p-4 border rounded-lg bg-gray-50">
+              <h4 className="font-medium mb-3 text-lg">{loja.loja_nome}</h4>
+              
+              {/* TOTAIS DA LOJA */}
+              <div className="grid grid-cols-3 gap-2 mb-3 text-sm">
+                <div className="text-center">
+                  <div className="text-green-600 font-semibold">📦 {loja.total_entregas || 0}</div>
+                  <div className="text-xs text-gray-500">entregas</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-red-600 font-semibold">❌ {loja.total_cancelamentos || 0}</div>
+                  <div className="text-xs text-gray-500">cancel.</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-blue-600 font-semibold">R$ {(loja.total_fretes || 0).toFixed(2)}</div>
+                  <div className="text-xs text-gray-500">fretes</div>
                 </div>
               </div>
-            );
-          })}
+
+              {/* ENTREGADORES DA LOJA (opcional - pode ser colapsável) */}
+              <details className="text-sm">
+                <summary className="cursor-pointer font-medium text-gray-700">
+                  👥 {loja.entregadores.length} Entregador(es)
+                </summary>
+                <div className="mt-2 space-y-2">
+                  {loja.entregadores.map((entregador, idx) => (
+                    <div key={idx} className="flex justify-between text-xs border-t pt-2">
+                      <span>{entregador.nome_completo}</span>
+                      <div className="flex gap-3">
+                        <span className="text-green-600">📦 {entregador.entregas}</span>
+                        <span className="text-red-600">❌ {entregador.cancelamentos}</span>
+                        <span className="text-blue-600">R$ {entregador.frete_pago.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </div>
+          ))}
         </div>
       ) : (
         <p className="text-gray-500 text-center py-4">Nenhuma loja encontrada</p>
