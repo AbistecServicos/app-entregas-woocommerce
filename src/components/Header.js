@@ -10,7 +10,8 @@ export default function Header({
   toggleSidebar, 
   showMenuButton = true, 
   title, 
-  onNotificationClick 
+  onNotificationClick,
+  userLojas = [] // ← NOVO: RECEBE AS LOJAS DO USUÁRIO
 }) {
   // ==================================================================
   // BLOCO 2: ESTADO DO COMPONENTE
@@ -23,7 +24,14 @@ export default function Header({
   // ==================================================================
   useEffect(() => {
     console.log('🎯 INICIANDO OUVINTE DE PEDIDOS...');
+    console.log('🏪 Lojas do usuário:', userLojas);
     
+    // Se usuário não tem lojas, não escutar
+    if (userLojas.length === 0) {
+      console.log('❌ Usuário não tem lojas associadas - saindo do listener');
+      return;
+    }
+
     // Canal para escutar inserts na tabela pedidos
     const channel = supabase
       .channel('novos-pedidos-notifications')
@@ -39,27 +47,42 @@ export default function Header({
           console.log('🚨 NOVO PEDIDO DETECTADO:', payload.new);
           
           // ==========================================================
-          // BLOCO 3.1: ATUALIZAR CONTADOR
+          // BLOCO 3.1: VERIFICAR SE PEDIDO É DAS LOJAS DO USUÁRIO
           // ==========================================================
-          setNotificationCount(prev => {
-            const newCount = prev + 1;
-            console.log(`🔔 Contador atualizado: ${prev} → ${newCount}`);
-            return newCount;
-          });
+          const pedidoLoja = payload.new.id_loja;
+          console.log(`🔍 Verificando se pedido da loja ${pedidoLoja} pertence ao usuário`);
+          
+          if (userLojas.includes(pedidoLoja)) {
+            console.log('✅ PEDIDO VÁLIDO - Pertence às lojas do usuário');
+            
+            // ==========================================================
+            // BLOCO 3.2: ATUALIZAR CONTADOR
+            // ==========================================================
+            setNotificationCount(prev => {
+              const newCount = prev + 1;
+              console.log(`🔔 Contador atualizado: ${prev} → ${newCount}`);
+              return newCount;
+            });
 
-          // ==========================================================
-          // BLOCO 3.2: TOCAR SOM DE NOTIFICAÇÃO
-          // ==========================================================
-          playNotificationSound();
+            // ==========================================================
+            // BLOCO 3.3: TOCAR SOM DE NOTIFICAÇÃO
+            // ==========================================================
+            playNotificationSound();
 
-          // ==========================================================
-          // BLOCO 3.3: MOSTRAR NOTIFICAÇÃO NATIVA DO NAVEGADOR
-          // ==========================================================
-          showBrowserNotification(payload.new);
+            // ==========================================================
+            // BLOCO 3.4: MOSTRAR NOTIFICAÇÃO NATIVA DO NAVEGADOR
+            // ==========================================================
+            showBrowserNotification(payload.new);
+          } else {
+            console.log(`❌ PEDIDO IGNORADO - Loja ${pedidoLoja} não está nas lojas do usuário`);
+          }
         }
       )
       .subscribe((status) => {
         console.log('📡 Status da inscrição:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Ouvinte ativo - aguardando novos pedidos...');
+        }
       });
 
     // ==========================================================
@@ -69,12 +92,14 @@ export default function Header({
       console.log('🧹 Limpando ouvinte de pedidos');
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [userLojas]); // ← IMPORTANTE: Agora depende das lojas do usuário
 
   // ==================================================================
   // BLOCO 5: FUNÇÃO PARA TOCAR SOM
   // ==================================================================
   const playNotificationSound = () => {
+    console.log('🔊 Tentando tocar som de notificação...');
+    
     // Prevenir spam de som (máximo 1 a cada 2 segundos)
     const now = Date.now();
     if (lastPlayedSound && (now - lastPlayedSound) < 2000) {
@@ -83,7 +108,7 @@ export default function Header({
     }
 
     try {
-      // Usar áudio nativo do navegador
+      // Método 1: Usar áudio nativo do navegador (funciona na maioria)
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
@@ -91,7 +116,7 @@ export default function Header({
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
       
-      oscillator.frequency.value = 800;
+      oscillator.frequency.value = 800; // Tom agudo
       oscillator.type = 'sine';
       
       gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
@@ -101,12 +126,15 @@ export default function Header({
       oscillator.stop(audioContext.currentTime + 0.5);
       
       setLastPlayedSound(now);
-      console.log('🔊 Som de notificação tocado');
+      console.log('✅ Som de notificação tocado com sucesso');
     } catch (error) {
-      console.log('❌ Erro ao tocar som:', error);
-      // Fallback: usar beep do sistema
+      console.log('❌ Erro ao tocar som nativo:', error);
+      
+      // Método 2: Fallback - usar beep simples
       try {
-        console.log('\x07'); // Beep no terminal (funciona em alguns navegadores)
+        // Beep do sistema (funciona em alguns navegadores)
+        console.log('\x07'); 
+        console.log('🔊 Beep do sistema acionado');
       } catch (e) {
         console.log('⚠️ Som não suportado neste navegador');
       }
@@ -117,23 +145,31 @@ export default function Header({
   // BLOCO 6: FUNÇÃO PARA NOTIFICAÇÃO DO NAVEGADOR
   // ==================================================================
   const showBrowserNotification = (pedido) => {
+    console.log('📢 Tentando mostrar notificação do navegador...');
+    
     // Verificar se o navegador suporta notificações
     if (!("Notification" in window)) {
       console.log('❌ Este navegador não suporta notificações');
       return;
     }
 
-    // Verificar se já temos permissão
+    console.log('📋 Status da permissão:', Notification.permission);
+
+    // Se já tem permissão, criar notificação
     if (Notification.permission === "granted") {
       createNotification(pedido);
     } 
     // Se não tem permissão, pedir
     else if (Notification.permission !== "denied") {
+      console.log('🔐 Solicitando permissão para notificações...');
       Notification.requestPermission().then(permission => {
+        console.log('📋 Permissão concedida:', permission);
         if (permission === "granted") {
           createNotification(pedido);
         }
       });
+    } else {
+      console.log('❌ Permissão para notificações foi negada pelo usuário');
     }
   };
 
@@ -141,31 +177,42 @@ export default function Header({
   // BLOCO 7: CRIAR NOTIFICAÇÃO
   // ==================================================================
   const createNotification = (pedido) => {
-    const notification = new Notification("🚚 NOVO PEDIDO!", {
-      body: `Pedido #${pedido.id_loja_woo || pedido.id} - ${pedido.nome_cliente || 'Cliente'}`,
-      icon: "/favicon.ico",
-      badge: "/favicon.ico",
-      tag: "novo-pedido", // Agrupa notificações
-      requireInteraction: true, // Fica até o usuário fechar
-      actions: [
-        {
-          action: "open",
-          title: "Ver Pedido"
-        }
-      ]
-    });
+    console.log('🎨 Criando notificação visual...');
+    
+    try {
+      const notification = new Notification("🚚 NOVO PEDIDO!", {
+        body: `Pedido #${pedido.id_loja_woo || pedido.id} - ${pedido.nome_cliente || 'Cliente'}`,
+        icon: "/favicon.ico",
+        badge: "/favicon.ico",
+        tag: "novo-pedido", // Agrupa notificações
+        requireInteraction: true, // Fica até o usuário fechar
+        actions: [
+          {
+            action: "open",
+            title: "Ver Pedido"
+          }
+        ]
+      });
 
-    // Quando clicar na notificação, abrir a página de pedidos
-    notification.onclick = () => {
-      window.focus();
-      window.location.href = '/pedidos-pendentes';
-      notification.close();
-    };
+      console.log('✅ Notificação criada com sucesso');
 
-    // Fechar automaticamente após 10 segundos
-    setTimeout(() => {
-      notification.close();
-    }, 10000);
+      // Quando clicar na notificação, abrir a página de pedidos
+      notification.onclick = () => {
+        console.log('👆 Notificação clicada - redirecionando...');
+        window.focus();
+        window.location.href = '/pedidos-pendentes';
+        notification.close();
+      };
+
+      // Fechar automaticamente após 10 segundos
+      setTimeout(() => {
+        notification.close();
+        console.log('⏰ Notificação fechada automaticamente');
+      }, 10000);
+
+    } catch (error) {
+      console.log('❌ Erro ao criar notificação:', error);
+    }
   };
 
   // ==================================================================
@@ -173,6 +220,7 @@ export default function Header({
   // ==================================================================
   const handleNotificationClick = () => {
     console.log('📌 Sino clicado - limpando notificações');
+    console.log('🔢 Contador antes:', notificationCount);
     
     // Zerar contador
     setNotificationCount(0);
@@ -182,12 +230,11 @@ export default function Header({
       onNotificationClick();
     }
     
-    // Opcional: navegar para página de notificações
-    // window.location.href = '/pedidos-pendentes';
+    console.log('✅ Notificações limpas');
   };
 
   // ==================================================================
-  // BLOCO 9: RENDER DO COMPONENTE (SEU CÓDIGO ORIGINAL - MANTIDO)
+  // BLOCO 9: RENDER DO COMPONENTE
   // ==================================================================
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -258,6 +305,15 @@ export default function Header({
         <div className="bg-blue-50 border-t border-blue-200 px-4 py-1">
           <p className="text-xs text-blue-700 text-center">
             🔔 {notificationCount} nova(s) notificação(ões) - Clique no sino para ver
+          </p>
+        </div>
+      )}
+
+      {/* DEBUG: MOSTRAR LOJAS DO USUÁRIO (APENAS DESENVOLVIMENTO) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="bg-yellow-50 border-t border-yellow-200 px-4 py-1">
+          <p className="text-xs text-yellow-700 text-center">
+            🏪 Lojas do usuário: {userLojas.join(', ') || 'Nenhuma'}
           </p>
         </div>
       )}

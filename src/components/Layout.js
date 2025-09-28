@@ -8,7 +8,13 @@ import { useFirebaseNotifications } from '../hooks/useFirebaseNotifications';
 // ==============================================================================
 // COMPONENTE LAYOUT PRINCIPAL COM NOTIFICAÇÕES PUSH
 // ==============================================================================
-const Layout = ({ children, hideSidebar = false }) => {
+const Layout = ({ 
+  children, 
+  hideSidebar = false,
+  userLojas = [], // ✅ NOVO: RECEBE LOJAS DO _app.js
+  initialUser = null, // ✅ RECEBE DO _app.js
+  isLoading = false // ✅ RECEBE DO _app.js
+}) => {
   // ============================================================================
   // 1. ESTADOS DO COMPONENTE
   // ============================================================================
@@ -45,11 +51,11 @@ const Layout = ({ children, hideSidebar = false }) => {
   }, []);
 
   // ============================================================================
-  // 4. EFFECT: GERENCIAR NOTIFICAÇÕES RECEBIDAS
+  // 4. EFFECT: GERENCIAR NOTIFICAÇÕES RECEBIDAS (FCM PUSH)
   // ============================================================================
   useEffect(() => {
     if (notification) {
-      console.log('📢 Nova notificação recebida no Layout:', notification);
+      console.log('📢 Nova notificação FCM recebida no Layout:', notification);
       
       setNotifications(prev => [notification, ...prev].slice(0, 10));
       setLatestNotification(notification);
@@ -64,21 +70,25 @@ const Layout = ({ children, hideSidebar = false }) => {
   }, [notification]);
 
   // ============================================================================
-  // 5. EFFECT: LOGS DE DEBUG (OPCIONAL)
+  // 5. EFFECT: LOGS DE DEBUG - VERIFICAR LOJAS
   // ============================================================================
   useEffect(() => {
+    console.log('🏪 Layout - Lojas recebidas:', userLojas);
+    console.log('👤 Layout - Usuário inicial:', initialUser?.email);
+    
     if (userProfile?.uid) {
       console.log('🔔 Sistema de notificações:', {
         usuario: userProfile.uid,
         suportado: isSupported,
         token: token ? '✅' : '❌',
-        notificacoes: notifications.length
+        notificacoes: notifications.length,
+        lojas: userLojas.length
       });
     }
-  }, [userProfile, isSupported, token, notifications.length]);
+  }, [userProfile, isSupported, token, notifications.length, userLojas]);
 
   // ============================================================================
-  // 6. FUNÇÕES: CONTROLE DA SIDEBAR
+  // 6. FUNÇÕES: CONTROLE DA SIDEBAR E NOTIFICAÇÕES
   // ============================================================================
   const toggleSidebar = () => {
     setSidebarOpen(prev => !prev);
@@ -112,22 +122,25 @@ const Layout = ({ children, hideSidebar = false }) => {
           toggleSidebar={toggleSidebar}
           onItemClick={closeSidebar}
           notificationCount={notifications.length}
+          user={initialUser} // ✅ PASSA USUÁRIO
+          isLoading={isLoading} // ✅ PASSA LOADING
         />
       )}
       
       {/* CONTEÚDO PRINCIPAL */}
       <div className="flex-1 flex flex-col overflow-hidden">
         
-        {/* HEADER */}
+        {/* HEADER - ✅ AGORA COM userLojas */}
         <Header 
           toggleSidebar={toggleSidebar} 
           showMenuButton={!hideSidebar}
           title={hideSidebar ? "Painel Administrativo" : undefined}
           notificationCount={notifications.length}
           onNotificationClick={() => setShowNotificationToast(true)}
+          userLojas={userLojas} // ✅ CRUCIAL: PASSA LOJAS PARA HEADER
         />
         
-        {/* TOAST DE NOTIFICAÇÃO */}
+        {/* TOAST DE NOTIFICAÇÃO (FCM PUSH) */}
         {showNotificationToast && latestNotification && (
           <div className="fixed top-4 right-4 z-50 max-w-sm bg-white rounded-lg shadow-lg border border-gray-200 animate-fade-in">
             <div className="p-4">
@@ -168,10 +181,13 @@ const Layout = ({ children, hideSidebar = false }) => {
           </div>
         )}
 
-        {/* BADGE DE STATUS (DESENVOLVIMENTO) */}
+        {/* BADGE DE STATUS (DESENVOLVIMENTO) - ✅ AGORA MOSTRA LOJAS */}
         {process.env.NODE_ENV === 'development' && (
           <div className="fixed bottom-4 left-4 z-40 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
-            🔔 {isSupported ? '✅' : '❌'} | Token: {token ? '✅' : '❌'} | Msgs: {notifications.length}
+            🔔 {isSupported ? '✅' : '❌'} | 
+            Token: {token ? '✅' : '❌'} | 
+            Msgs: {notifications.length} |
+            Lojas: {userLojas.length}
           </div>
         )}
         
