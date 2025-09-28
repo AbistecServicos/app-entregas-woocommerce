@@ -62,13 +62,8 @@ export default function Login() {
   };
 
 // ============================================================================
-// 4. FUNÇÃO: LOGIN COM EMAIL/SENHA (CORRIGIDA)
+// 4. FUNÇÃO: LOGIN COM EMAIL/SENHA (CORRIGIDA - SEM RELOAD)
 // ============================================================================
-/**
- * Autentica o usuário com email/senha e redireciona com base no perfil.
- * Inclui validação prévia e tratamento de erros detalhado.
- * ✅ CORREÇÃO: Força atualização do sidebar após login
- */
 const handleLogin = async (e) => {
   e.preventDefault();
   setLoading(true);
@@ -91,8 +86,7 @@ const handleLogin = async (e) => {
       throw authError;
     }
 
-    // 🎯 NOVO: AGUARDAR PROCESSAMENTO DO SUPABASE
-    await new Promise(resolve => setTimeout(resolve, 500));
+    console.log('✅ Usuário autenticado:', authData.user.email);
 
     // 4.2. VERIFICAÇÃO DE PERFIL E REDIRECIONAMENTO
     const { data: usuario, error: userError } = await supabase
@@ -118,7 +112,7 @@ const handleLogin = async (e) => {
 
       if (!associacoes || associacoes.length === 0) {
         setError('Você não possui acesso ativo. Contate o administrador.');
-        await supabase.auth.signOut(); // Desconta usuário sem acesso
+        await supabase.auth.signOut();
         return;
       }
 
@@ -135,21 +129,16 @@ const handleLogin = async (e) => {
       }
     }
 
-    // 🎯 CORREÇÃO: REDIRECIONAMENTO COM ATUALIZAÇÃO FORÇADA
-    console.log('✅ Login bem-sucedido, redirecionando para:', redirectPath);
+    // ✅ CORREÇÃO: REDIRECIONAMENTO LIMPO
+    console.log('🎯 Redirecionando para:', redirectPath);
     
-    // Primeiro redireciona para a página correta
-    router.push(redirectPath);
-    
-    // 🎯 NOVO: FORÇAR ATUALIZAÇÃO COMPLETA APÓS 1 SEGUNDO
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
+    await router.push(redirectPath);
+    console.log('🔄 Redirecionamento concluído com sucesso');
     
   } catch (error) {
     // 4.3. TRATAMENTO DE ERROS AMIGÁVEL
     setError(translateError(error));
-    console.error('Erro no login:', error);
+    console.error('❌ Erro no login:', error);
   } finally {
     // 4.4. FINALIZAÇÃO
     setLoading(false);
@@ -159,10 +148,6 @@ const handleLogin = async (e) => {
 // ============================================================================
 // 5. FUNÇÃO: LOGIN COM GOOGLE (CORRIGIDA)
 // ============================================================================
-/**
- * Inicia o fluxo de login com Google OAuth, redirecionando para completar perfil.
- * ✅ CORREÇÃO: Adiciona parâmetro para forçar atualização após retorno
- */
 const handleGoogleLogin = async () => {
   try {
     setLoading(true);
@@ -171,8 +156,8 @@ const handleGoogleLogin = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        // 🎯 CORREÇÃO: ADICIONAR PARÂMETRO DE CONTROLE
-        redirectTo: `${window.location.origin}/perfil?fromLogin=true`,
+        // ✅ CORREÇÃO: Redirecionar para página inicial, não para perfil
+        redirectTo: `${window.location.origin}/`,
       },
     });
     
@@ -182,12 +167,11 @@ const handleGoogleLogin = async () => {
     
   } catch (error) {
     setError(translateError(error));
-    console.error('Erro no login Google:', error);
+    console.error('❌ Erro no login Google:', error);
   } finally {
     setLoading(false);
   }
 };
-
   // ============================================================================
   // 6. RENDERIZAÇÃO DO COMPONENTE
   // ============================================================================

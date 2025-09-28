@@ -1,41 +1,25 @@
 // next.config.js
-// ✅ Importar path para resolver caminhos
 const path = require('path');
 
-// ✅ Configurar PWA com next-pwa (USE ESTA CONFIGURAÇÃO)
-const withPWA = require('next-pwa')({
-  dest: 'public',
-  register: true,
-  skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development', // ✅ Desativa PWA em desenvolvimento
-  
-  // ✅ ADICIONE ESTAS NOVAS CONFIGURAÇÕES:
-  runtimeCaching: [],
-  publicExcludes: ['!noprecache/**/*'],
-  buildExcludes: [/middleware-manifest\.json$/]
-});
-
-// ✅ MANTENHA TODO O RESTO DO SEU ARQUIVO, apenas mudando a parte PWA
-module.exports = withPWA({
+// ✅ REMOVA o withPWA e use configuração simples
+module.exports = {
   // ==========================================================================
   // CONFIGURAÇÕES PARA RESOLVER AVISOS DE MÚLTIPLOS LOCKFILES
   // ==========================================================================
-  outputFileTracingRoot: path.join(__dirname, '../'), // ✅ Define raiz correta
+  outputFileTracingRoot: path.join(__dirname, '../'),
   
   // ==========================================================================
-  // CONFIGURAÇÕES DO NEXT.JS (MANTENHA)
+  // CONFIGURAÇÕES DO NEXT.JS
   // ==========================================================================
   reactStrictMode: true,
   
   // ==========================================================================
-  // CONFIGURAÇÕES PARA MELHORAR PERFORMANCE EM MONOREPO (MANTENHA)
+  // CONFIGURAÇÕES PARA MELHORAR PERFORMANCE EM MONOREPO
   // ==========================================================================
-  transpilePackages: [
-    // Adicione aqui os pacotes do seu monorepo que precisam ser transpilados
-  ],
+  transpilePackages: [],
   
   // ==========================================================================
-  // CONFIGURAÇÕES DE WEBPACK (MANTENHA)
+  // CONFIGURAÇÕES DE WEBPACK
   // ==========================================================================
   webpack: (config, { isServer }) => {
     // ✅ Adicionar suporte para arquivos .js da pasta src/lib
@@ -56,7 +40,7 @@ module.exports = withPWA({
   },
   
   // ==========================================================================
-  // CONFIGURAÇÕES DE HEADERS (MANTENHA)
+  // CONFIGURAÇÕES DE HEADERS
   // ==========================================================================
   async headers() {
     return [
@@ -78,15 +62,20 @@ module.exports = withPWA({
           },
         ],
       },
+      // ✅ ADICIONE ESTE HEADER PARA O SERVICE WORKER DO FIREBASE
+      {
+        source: '/firebase-messaging-sw.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/',
+          },
+        ],
+      },
     ];
   },
-  
-  // ✅ ADICIONE ESTA NOVA SEÇÃO (OPCIONAL, MAS RECOMENDADO)
-  // ==========================================================================
-  // CONFIGURAÇÕES ADICIONAIS PARA PWA
-  // ==========================================================================
-  pwa: {
-    scope: '/',
-    sw: 'sw.js'
-  }
-});
+};

@@ -1,16 +1,137 @@
 // components/Sidebar.js
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabase';
 import { useUserProfile } from '../hooks/useUserProfile';
 import UserProfile from './UserProfile';
 
-const Sidebar = ({ isOpen, toggleSidebar }) => {
+// ✅ CORREÇÃO: RECEBER PROPS DO LAYOUT
+const Sidebar = ({ 
+  isOpen, 
+  toggleSidebar,
+  user = null, // ← do _app.js via Layout
+  isLoading = false, // ← do _app.js via Layout  
+  userLojas = [] // ← do _app.js via Layout
+}) => {
   const router = useRouter();
-  const { user, userProfile, userRole, userLojas, loading: loadingUser, error } = useUserProfile();
   
-  // Itens do menu (mantido igual)
+  // ✅ HOOK PARA DADOS COMPLETOS (USADO COMO FALLBACK)
+  const { 
+    user: hookUser, 
+    userProfile, 
+    userRole: hookUserRole, 
+    userLojas: hookUserLojas, 
+    loading: loadingUser, 
+    error 
+  } = useUserProfile();
+  
+  // ✅ ESTADO PARA DADOS INSTANTÂNEOS
+  const [instantData, setInstantData] = useState({
+    user: null,
+    userLojas: [],
+    userRole: 'visitante'
+  });
+
+  // ============================================================================
+  // EFFECT: SINCRONIZAR DADOS INSTANTÂNEOS COM PROPS (CORRIGIDO)
+  // ============================================================================
+useEffect(() => {
+  console.log('🔄 Sidebar - Props atualizadas:', { 
+    user: user?.email, 
+    userLojas: userLojas,
+    isLoading 
+  });
+
+  // ✅ SE LOGOUT: Limpar dados instantâneos
+  if (!user) {
+    console.log('🧹 Sidebar - Limpando dados (logout)');
+    setInstantData({
+      user: null,
+      userLojas: [],
+      userRole: 'visitante'
+    });
+    return;
+  }
+
+  // ✅ SE LOGIN: Atualizar dados instantâneos
+  if (user && !isLoading) {
+    console.log('🚀 Sidebar - Atualizando dados instantâneos (login)');
+    
+    let instantRole = 'visitante';
+    if (userLojas.length > 0) {
+      // ✅ CORREÇÃO: Determinar role CORRETAMENTE baseado nas funções
+      const userFunctions = userLojas.map(loja => loja.funcao);
+      console.log('🔍 Funções do usuário nas lojas:', userFunctions);
+      
+      if (userFunctions.includes('gerente')) {
+        instantRole = 'gerente';
+        console.log('👑 Usuário é GERENTE');
+      } else if (userFunctions.includes('entregador')) {
+        instantRole = 'entregador';
+        console.log('🚚 Usuário é ENTREGADOR');
+      } else if (userFunctions.includes('admin')) {
+        instantRole = 'admin';
+        console.log('⚙️ Usuário é ADMIN');
+      } else {
+        instantRole = 'entregador'; // fallback
+        console.log('🔀 Usuário com função desconhecida, usando fallback');
+      }
+    }
+    
+    setInstantData({
+      user: user,
+      userLojas: userLojas,
+      userRole: instantRole
+    });
+  }
+}, [user, userLojas, isLoading]);
+
+
+  // ============================================================================
+  // EFFECT: ATUALIZAR COM DADOS COMPLETOS DO HOOK
+  // ============================================================================
+  useEffect(() => {
+    if (hookUser && !loadingUser && hookUserRole) {
+      console.log('📦 Sidebar - Dados completos do hook:', hookUserRole);
+      setInstantData(prev => ({
+        ...prev,
+        userRole: hookUserRole // Atualiza role com dados completos
+      }));
+    }
+  }, [hookUser, hookUserRole, loadingUser]);
+
+  // ============================================================================
+  // VARIÁVEIS FINAIS (DADOS INSTANTÂNEOS PRIMEIRO)
+  // ============================================================================
+  const displayUser = instantData.user || hookUser;
+  const displayUserLojas = instantData.userLojas.length > 0 ? instantData.userLojas : hookUserLojas;
+  const displayUserRole = instantData.userRole !== 'visitante' ? instantData.userRole : hookUserRole;
+  const displayLoading = (isLoading && !instantData.user) || loadingUser;
+
+  // ✅ CORREÇÃO: CRIAR PERFIL COMPLETO PARA O USERPROFILE
+  const displayUserProfile = userProfile || (displayUser ? {
+    // ✅ FALLBACK: criar perfil básico dos dados instantâneos
+    nome_completo: displayUser.user_metadata?.full_name || displayUser.email,
+    email: displayUser.email,
+    foto: displayUser.user_metadata?.avatar_url,
+    nome_usuario: displayUser.user_metadata?.user_name || displayUser.email.split('@')[0],
+    telefone: displayUser.user_metadata?.phone || '',
+  } : null);
+
+  console.log('👤 Sidebar - Estado final:', {
+    displayUser: displayUser?.email,
+    displayUserRole,
+    lojas: displayUserLojas.length,
+    instantUser: !!instantData.user,
+    hookUser: !!hookUser,
+    hasUserProfile: !!userProfile,
+    hasDisplayProfile: !!displayUserProfile
+  });
+
+  // ============================================================================
+  // ITENS DO MENU
+  // ============================================================================
   const homeItem = { path: '/', icon: '🏠', label: 'EntregasWoo' };
   const vendasWooItem = { path: '/vendaswoo', icon: '🛍️', label: 'VendasWoo' };
   const perfilItem = { path: '/perfil', icon: '👤', label: 'Meu Perfil' };
@@ -22,63 +143,71 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const relatoriosItem = { path: '/relatorios', icon: '📈', label: 'Relatórios' };
   const adminItem = { path: '/admin', icon: '⚙️', label: 'Administração' };
 
-  // Montagem condicional dos itens (mantido igual)
-  let menuItems = [homeItem, vendasWooItem]; // ← Adicione após homeItem
+  // ============================================================================
+  // MONTAGEM CONDICIONAL DOS ITENS (USA DADOS INSTANTÂNEOS)
+  // ============================================================================
+  let menuItems = [homeItem, vendasWooItem];
 
-  if (user) {
+  if (displayUser) {
     menuItems.push(perfilItem);
 
-    if (userRole === 'entregador') {
+    if (displayUserRole === 'entregador') {
       menuItems.push(pendentesItem, aceitosItem);
     }
 
-    if (['entregador', 'gerente', 'admin'].includes(userRole)) {
+    if (['entregador', 'gerente', 'admin'].includes(displayUserRole)) {
       menuItems.push(entreguesItem);
     }
 
-    if (userLojas.length > 0 || userRole === 'admin') {
+    if (displayUserLojas.length > 0 || displayUserRole === 'admin') {
       menuItems.push(relatoriosItem);
     }
 
-    if (['gerente', 'admin'].includes(userRole)) {
+    if (['gerente', 'admin'].includes(displayUserRole)) {
       menuItems.push(gestaoItem, todosItem);
     }
 
-    if (userRole === 'admin') {
+    if (displayUserRole === 'admin') {
       menuItems.push(adminItem);
     }
   }
 
   // ============================================================================
-  // FUNÇÃO DE LOGOUT CORRIGIDA
+  // FUNÇÃO DE LOGOUT CORRIGIDA (SEM RELOAD FORÇADO)
   // ============================================================================
   const handleLogout = async () => {
     try {
-      // Fechar sidebar no mobile antes do logout
+      console.log('🚪 Iniciando logout...');
+      
+      // Fechar sidebar no mobile
       if (window.innerWidth < 1024) {
         toggleSidebar();
       }
+      
+      // ✅ CORREÇÃO: Limpar estado local ANTES do logout
+      setInstantData({
+        user: null,
+        userLojas: [],
+        userRole: 'visitante'
+      });
       
       // Realizar logout
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
-      console.log('Logout realizado com sucesso');
+      console.log('✅ Logout realizado com sucesso');
       
-      // 🎯 CORREÇÃO: REDIRECIONAR PARA PÁGINA INICIAL
-      router.push('/');
-      
-      // 🎯 CORREÇÃO: FORÇAR ATUALIZAÇÃO DO MENU
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
+      // ✅ CORREÇÃO: Redirecionamento limpo
+      await router.push('/');
       
     } catch (error) {
-      console.error('Erro ao fazer logout:', error);
+      console.error('❌ Erro ao fazer logout:', error);
     }
   };
 
-  // Funções auxiliares (mantidas iguais)
+  // ============================================================================
+  // FUNÇÕES AUXILIARES
+  // ============================================================================
   const handleLoginRedirect = () => {
     if (window.innerWidth < 1024) {
       toggleSidebar();
@@ -92,7 +221,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
     }
   };
 
-  // Renderização (mantida igual)
+  // ============================================================================
+  // RENDERIZAÇÃO CORRIGIDA
+  // ============================================================================
   return (
     <>
       {/* Overlay para mobile */}
@@ -112,20 +243,20 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         flex flex-col h-full
       `}>
         {/* Logo / Marca do sistema */}
-<div className="p-4 border-b border-purple-700">
-  <Link href="/" passHref onClick={handleMenuItemClick}>
-    <div className="cursor-pointer flex justify-center">
-      <img 
-        src="https://czzidhzzpqegfvvmdgno.supabase.co/storage/v1/object/public/box/logos/logo_entregaswoo_600x240_branco.png"
-        alt="EntregasWoo"
-        className="h-20 w-auto object-contain" // ← Um pouco maior no sidebar
-      />
-    </div>
-    <p className="text-purple-300 text-sm mt-2 text-center">Sistema de Gestão</p>
-  </Link>
-</div>
+        <div className="p-4 border-b border-purple-700">
+          <Link href="/" passHref onClick={handleMenuItemClick}>
+            <div className="cursor-pointer flex justify-center">
+              <img 
+                src="https://czzidhzzpqegfvvmdgno.supabase.co/storage/v1/object/public/box/logos/logo_entregaswoo_600x240_branco.png"
+                alt="EntregasWoo"
+                className="h-20 w-auto object-contain"
+              />
+            </div>
+            <p className="text-purple-300 text-sm mt-2 text-center">Sistema de Gestão</p>
+          </Link>
+        </div>
 
-        {/* Menu de navegação */}
+        {/* Menu de navegação - AGORA INSTANTÂNEO */}
         <nav className="flex-1 p-4 overflow-y-auto">
           {menuItems.map((item) => (
             <Link
@@ -144,41 +275,15 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           ))}
         </nav>
 
-        {/* Perfil do usuário (condicional) */}
-        {user && (
-          <div className="p-4 border-t border-purple-700 bg-purple-900">
-            <UserProfile 
-              userProfile={userProfile} 
-              userRole={userRole} 
-              loading={loadingUser}
-              error={error}
-            />
-          </div>
-        )}
-
-        {/* Botão dinâmico: Entrar/Sair */}
-        <div className="p-4 border-t border-purple-700">
-          {user ? (
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center justify-center py-2 px-4 bg-purple-700 hover:bg-purple-600 text-white rounded-lg transition-colors"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              Sair
-            </button>
-          ) : (
-            <button
-              onClick={handleLoginRedirect}
-              className="w-full flex items-center justify-center py-2 px-4 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l-4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-              </svg>
-              Entrar
-            </button>
-          )}
+        {/* ✅ CORREÇÃO: UserProfile CORRETO - embaixo do menu */}
+        <div className="mt-auto border-t border-purple-700">
+          <UserProfile 
+            user={displayUserProfile} // ✅ CORRETO: prop 'user'
+            loading={displayLoading}
+            showLogout={!!displayUser} // ✅ CORRETO: mostrar logout se logado
+            onLogout={handleLogout} // ✅ CORRETO: função logout
+            onLogin={handleLoginRedirect} // ✅ CORRETO: função login
+          />
         </div>
       </div>
     </>

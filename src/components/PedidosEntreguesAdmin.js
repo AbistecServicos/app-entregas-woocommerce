@@ -1,3 +1,4 @@
+// components/PedidosEntreguesAdmin.js (CORREÇÃO APENAS DO loja_logo)
 import React, { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { jsPDF } from 'jspdf';
@@ -142,7 +143,7 @@ const ModalDetalhesPedido = ({ pedido, isOpen, onClose }) => {
 };
 
 // ==============================================================================
-// 4. FUNÇÕES DE CARREGAMENTO DE IMAGEM E GERAÇÃO DE PDF
+// 4. FUNÇÕES DE CARREGAMENTO DE IMAGEM E GERAÇÃO DE PDF (CORRIGIDAS)
 // ==============================================================================
 
 /**
@@ -198,7 +199,26 @@ const carregarImagem = async (url) => {
 };
 
 /**
- * Gera recibos em PDF agrupados por loja
+ * Busca logo da loja na tabela lojas (NOVA FUNÇÃO)
+ */
+const buscarLogoDaLoja = async (idLoja) => {
+  try {
+    const { data, error } = await supabase
+      .from('lojas')
+      .select('loja_logo')
+      .eq('id_loja', idLoja)
+      .single();
+
+    if (error) throw error;
+    return data?.loja_logo || null;
+  } catch (error) {
+    console.error('Erro ao buscar logo da loja:', error);
+    return null;
+  }
+};
+
+/**
+ * Gera recibos em PDF agrupados por loja (CORRIGIDO)
  */
 const gerarRecibosPDF = async (pedidosSelecionados, todosPedidos) => {
   if (pedidosSelecionados.size === 0) {
@@ -207,26 +227,32 @@ const gerarRecibosPDF = async (pedidosSelecionados, todosPedidos) => {
   }
 
   try {
-    // Agrupar pedidos por loja
+    // Agrupar pedidos por loja e buscar logos
     const pedidosPorLoja = {};
-    Array.from(pedidosSelecionados).forEach(id => {
+    
+    for (const id of Array.from(pedidosSelecionados)) {
       const pedido = todosPedidos.find(p => p.id === id);
       if (pedido) {
         const lojaId = pedido.id_loja;
+        
         if (!pedidosPorLoja[lojaId]) {
+          // ✅ CORREÇÃO: Buscar logo da tabela lojas
+          const lojaLogo = await buscarLogoDaLoja(lojaId);
+          
           pedidosPorLoja[lojaId] = {
             loja_nome: pedido.loja_nome,
-            loja_logo: pedido.loja_logo,
+            loja_logo: lojaLogo, // ✅ Agora vem da tabela lojas
             entregador: pedido.aceito_por_nome,
             pedidos: []
           };
         }
+        
         pedidosPorLoja[lojaId].pedidos.push({
           id_loja_woo: pedido.id_loja_woo,
           frete_pago: parseFloat(pedido.frete_pago || 0)
         });
       }
-    });
+    }
 
     // Criar PDF com configurações de alta qualidade
     const pdf = new jsPDF({
@@ -253,7 +279,7 @@ const gerarRecibosPDF = async (pedidosSelecionados, todosPedidos) => {
         yPosition = 20;
       }
 
-      // Adicionar logo em ALTA RESOLUÇÃO
+      // Adicionar logo em ALTA RESOLUÇÃO (se existir)
       if (loja.loja_logo) {
         try {
           const imagem = await carregarImagem(loja.loja_logo);
@@ -363,9 +389,9 @@ const gerarRecibosPDF = async (pedidosSelecionados, todosPedidos) => {
 };
 
 // ==============================================================================
-// 5. COMPONENTE PRINCIPAL
+// 5. COMPONENTE PRINCIPAL (CORRIGIDO)
 // ==============================================================================
-export default function PedidosEntregues() {
+export default function PedidosEntreguesAdmin() {
   // Estados do componente
   const [pedidos, setPedidos] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -379,7 +405,7 @@ export default function PedidosEntregues() {
   const [modalAberto, setModalAberto] = useState(false);
 
   // ============================================================================
-  // 5.1 FUNÇÕES DE CÁLCULO E CARREGAMENTO
+  // 5.1 FUNÇÕES DE CÁLCULO E CARREGAMENTO (CORRIGIDAS)
   // ============================================================================
 
   /**
@@ -394,12 +420,13 @@ export default function PedidosEntregues() {
   }, []);
 
   /**
-   * Carrega pedidos do Supabase com filtros aplicados
+   * Carrega pedidos do Supabase com filtros aplicados (CORRIGIDO)
    */
   const carregarPedidos = async () => {
     setIsLoading(true);
     try {
-      let query = supabase.from('pedidos').select('*, loja_logo').eq('status_transporte', 'entregue');
+      // ✅ CORREÇÃO: Removido 'loja_logo' da query
+      let query = supabase.from('pedidos').select('*').eq('status_transporte', 'entregue');
       
       if (filtroEntregador) query = query.ilike('aceito_por_nome', `%${filtroEntregador}%`);
       if (filtroLoja) query = query.eq('id_loja', filtroLoja);

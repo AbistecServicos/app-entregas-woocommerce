@@ -11,7 +11,7 @@ import { useFirebaseNotifications } from '../hooks/useFirebaseNotifications';
 const Layout = ({ 
   children, 
   hideSidebar = false,
-  userLojas = [], // ✅ NOVO: RECEBE LOJAS DO _app.js
+  userLojas = [], // ✅ RECEBE LOJAS DO _app.js
   initialUser = null, // ✅ RECEBE DO _app.js
   isLoading = false // ✅ RECEBE DO _app.js
 }) => {
@@ -64,28 +64,30 @@ const Layout = ({
       const timer = setTimeout(() => {
         setShowNotificationToast(false);
       }, 5000);
-
+      
       return () => clearTimeout(timer);
     }
   }, [notification]);
 
   // ============================================================================
-  // 5. EFFECT: LOGS DE DEBUG - VERIFICAR LOJAS
+  // 5. EFFECT: LOGS DE DEBUG - VERIFICAR LOJAS (CORRIGIDO)
   // ============================================================================
   useEffect(() => {
-    console.log('🏪 Layout - Lojas recebidas:', userLojas);
-    console.log('👤 Layout - Usuário inicial:', initialUser?.email);
-    
-    if (userProfile?.uid) {
-      console.log('🔔 Sistema de notificações:', {
-        usuario: userProfile.uid,
-        suportado: isSupported,
-        token: token ? '✅' : '❌',
-        notificacoes: notifications.length,
-        lojas: userLojas.length
-      });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🏪 Layout - Lojas recebidas:', userLojas);
+      console.log('👤 Layout - Usuário inicial:', initialUser?.email);
+      
+      if (userProfile?.uid) {
+        console.log('🔔 Sistema de notificações:', {
+          usuario: userProfile.uid,
+          suportado: isSupported,
+          token: token ? '✅' : '❌',
+          notificacoes: notifications.length,
+          lojas: userLojas.length
+        });
+      }
     }
-  }, [userProfile, isSupported, token, notifications.length, userLojas]);
+  }, [userProfile, isSupported, token, notifications.length, userLojas, initialUser]);
 
   // ============================================================================
   // 6. FUNÇÕES: CONTROLE DA SIDEBAR E NOTIFICAÇÕES
@@ -122,11 +124,12 @@ const Layout = ({
           toggleSidebar={toggleSidebar}
           onItemClick={closeSidebar}
           notificationCount={notifications.length}
-          user={initialUser} // ✅ PASSA USUÁRIO
-          isLoading={isLoading} // ✅ PASSA LOADING
+          user={initialUser} // ← USA initialUser DIRETO
+          isLoading={isLoading} // ← USA isLoading DIRETO 
+          userLojas={userLojas} // ← PASSA LOJAS TAMBÉM
         />
       )}
-      
+
       {/* CONTEÚDO PRINCIPAL */}
       <div className="flex-1 flex flex-col overflow-hidden">
         
@@ -139,7 +142,7 @@ const Layout = ({
           onNotificationClick={() => setShowNotificationToast(true)}
           userLojas={userLojas} // ✅ CRUCIAL: PASSA LOJAS PARA HEADER
         />
-        
+
         {/* TOAST DE NOTIFICAÇÃO (FCM PUSH) */}
         {showNotificationToast && latestNotification && (
           <div className="fixed top-4 right-4 z-50 max-w-sm bg-white rounded-lg shadow-lg border border-gray-200 animate-fade-in">

@@ -4,113 +4,117 @@ import '../styles/globals.css';
 import Layout from '../components/Layout';
 import { supabase } from '../../lib/supabase';
 
+// ==============================================================================
+// COMPONENTE PRINCIPAL DO NEXT.JS
+// ==============================================================================
 function MyApp({ Component, pageProps }) {
+  // ============================================================================
+  // 1. ESTADOS GLOBAIS
+  // ============================================================================
+  const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [initialUser, setInitialUser] = useState(null);
   const [userLojas, setUserLojas] = useState([]);
 
   // ============================================================================
-  // 1. VERIFICAÇÃO INICIAL DE AUTENTICAÇÃO
+  // 2. FUNÇÃO: CARREGAR LOJAS DO USUÁRIO
+  // ============================================================================
+  const loadUserLojas = async (userId) => {
+    try {
+      console.log('🏪 Carregando lojas do usuário:', userId);
+      
+      const { data: lojas, error } = await supabase
+        .from('loja_associada')
+        .select('id_loja, funcao')
+        .eq('uid_usuario', userId)
+        .eq('status_vinculacao', 'ativo');
+
+      if (error) throw error;
+
+      console.log('✅ Lojas carregadas:', lojas?.length || 0);
+      setUserLojas(lojas || []);
+      
+    } catch (error) {
+      console.error('❌ Erro ao carregar lojas:', error);
+      setUserLojas([]);
+    }
+  };
+
+  // ============================================================================
+  // 3. EFFECT: VERIFICAR AUTENTICAÇÃO AO INICIAR
   // ============================================================================
   useEffect(() => {
-    const checkAuthState = async () => {
+    console.log('🔐 Verificando sessão inicial...');
+    
+    const checkSession = async () => {
       try {
-        console.log('🔐 Iniciando verificação de autenticação...');
-        
         const { data: { session } } = await supabase.auth.getSession();
-        console.log('👤 Sessão encontrada:', !!session);
-        setInitialUser(session?.user || null);
         
-        // Se tem usuário, carrega suas lojas
         if (session?.user) {
+          console.log('✅ Sessão encontrada:', session.user.email);
+          setUser(session.user);
           await loadUserLojas(session.user.id);
+        } else {
+          console.log('ℹ️ Nenhuma sessão ativa');
+          setUser(null);
+          setUserLojas([]);
         }
       } catch (error) {
-        console.error('❌ Erro ao verificar autenticação:', error);
-        setInitialUser(null);
-        setUserLojas([]);
+        console.error('❌ Erro ao verificar sessão:', error);
       } finally {
         setIsLoading(false);
-        console.log('✅ Verificação de autenticação concluída');
       }
     };
 
-    checkAuthState();
+    checkSession();
+  }, []);
 
-    // Escuta mudanças de autenticação
+  // ============================================================================
+  // 4. EFFECT: OUVIR MUDANÇAS DE AUTENTICAÇÃO (CORRIGIDO)
+  // ============================================================================
+  useEffect(() => {
+    console.log('👂 Iniciando listener de autenticação...');
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('🔄 Mudança de autenticação:', event);
+        console.log(`🔄 Evento de auth: ${event}`);
         
-        const currentUser = session?.user || null;
-        setInitialUser(currentUser);
+        // ✅ BLOCO 4.1: LOGIN
+        if (event === 'SIGNED_IN' && session?.user) {
+          console.log('🎯 Usuário fez login:', session.user.email);
+          setUser(session.user);
+          await loadUserLojas(session.user.id);
+        } 
         
-        if (event === 'SIGNED_IN' && currentUser) {
-          await loadUserLojas(currentUser.id);
-        }
-        
-        if (event === 'SIGNED_OUT') {
+        // ✅ BLOCO 4.2: LOGOUT
+        else if (event === 'SIGNED_OUT') {
+          console.log('🚪 Usuário fez logout');
+          setUser(null);
           setUserLojas([]);
-          console.log('🧹 Lojas limpas (logout)');
         }
+        
+        // ✅ BLOCO 4.3: OUTROS EVENTOS
+        else if (event === 'USER_UPDATED' && session?.user) {
+          console.log('📝 Usuário atualizado:', session.user.email);
+          setUser(session.user);
+        }
+        
+        setIsLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    // ✅ BLOCO 4.4: CLEANUP
+    return () => {
+      console.log('🧹 Limpando listener de auth');
+      subscription?.unsubscribe();
+    };
   }, []);
 
   // ============================================================================
-  // 2. CARREGAMENTO DAS LOJAS DO USUÁRIO (CORRIGIDO)
-  // ============================================================================
-  const loadUserLojas = async (userId) => {
-  try {
-    console.log('🏪 Carregando lojas do usuário:', userId);
-    
-    const { data: lojas, error } = await supabase
-      .from('loja_associada')
-      .select('id_loja')
-      .eq('uid_usuario', userId)
-      .eq('status_vinculacao', 'ativo');
-
-    if (error) throw error;
-
-    if (lojas && lojas.length > 0) {
-      const lojasIds = lojas.map(loja => loja.id_loja);
-      setUserLojas(lojasIds); // ← ESTÁ FUNCIONANDO?
-      console.log(`✅ ${lojas.length} loja(s) carregada(s):`, lojasIds);
-    } else {
-      setUserLojas([]);
-      console.log('ℹ️ Usuário não tem lojas associadas');
-    }
-  } catch (error) {
-    console.error('❌ Erro ao carregar lojas:', error);
-    setUserLojas([]);
-  }
-};
-
-  // ============================================================================
-  // 3. SERVICE WORKER
-  // ============================================================================
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      console.log('🔧 Registrando Service Worker...');
-      
-      navigator.serviceWorker.register('/firebase-messaging-sw.js')
-        .then((registration) => {
-          console.log('✅ Service Worker registrado com sucesso');
-        })
-        .catch((error) => {
-          console.error('❌ Erro no Service Worker:', error);
-        });
-    }
-  }, []);
-
-  // ============================================================================
-  // 4. RENDERIZAÇÃO PRINCIPAL
+  // 5. RENDERIZAÇÃO PRINCIPAL
   // ============================================================================
   return (
     <Layout 
-      initialUser={initialUser} 
+      initialUser={user}
       isLoading={isLoading}
       userLojas={userLojas}
     >
