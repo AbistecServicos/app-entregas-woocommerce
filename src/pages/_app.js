@@ -63,33 +63,30 @@ function MyApp({ Component, pageProps }) {
   // 2. CARREGAMENTO DAS LOJAS DO USUÁRIO (CORRIGIDO)
   // ============================================================================
   const loadUserLojas = async (userId) => {
-    try {
-      console.log('🏪 Carregando lojas do usuário:', userId);
-      
-      // ✅ QUERY CORRIGIDA - apenas IDs, sem join problemático
-      const { data: lojas, error } = await supabase
-        .from('loja_associada')
-        .select('id_loja') // ← APENAS IDS
-        .eq('uid_usuario', userId)
-        .eq('status_vinculacao', 'ativo');
+  try {
+    console.log('🏪 Carregando lojas do usuário:', userId);
+    
+    const { data: lojas, error } = await supabase
+      .from('loja_associada')
+      .select('id_loja')
+      .eq('uid_usuario', userId)
+      .eq('status_vinculacao', 'ativo');
 
-      if (error) {
-        throw error;
-      }
+    if (error) throw error;
 
-      if (lojas && lojas.length > 0) {
-        const lojasIds = lojas.map(loja => loja.id_loja);
-        setUserLojas(lojasIds);
-        console.log(`✅ ${lojas.length} loja(s) carregada(s):`, lojasIds);
-      } else {
-        setUserLojas([]);
-        console.log('ℹ️ Usuário não tem lojas associadas');
-      }
-    } catch (error) {
-      console.error('❌ Erro ao carregar lojas:', error);
+    if (lojas && lojas.length > 0) {
+      const lojasIds = lojas.map(loja => loja.id_loja);
+      setUserLojas(lojasIds); // ← ESTÁ FUNCIONANDO?
+      console.log(`✅ ${lojas.length} loja(s) carregada(s):`, lojasIds);
+    } else {
       setUserLojas([]);
+      console.log('ℹ️ Usuário não tem lojas associadas');
     }
-  };
+  } catch (error) {
+    console.error('❌ Erro ao carregar lojas:', error);
+    setUserLojas([]);
+  }
+};
 
   // ============================================================================
   // 3. SERVICE WORKER
