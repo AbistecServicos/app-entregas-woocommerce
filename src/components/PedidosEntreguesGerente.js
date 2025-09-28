@@ -227,13 +227,13 @@ const atualizarPedidos = async () => {
 const handleSelecionarPedido = (pedidoId, isChecked) => {
   const pedido = pedidos.find(p => p.id === pedidoId);
   
-  // ✅ PERMITIR SELECIONAR MESMO PROCESSADOS (apenas bloquear edição)
-  if (isChecked) {
-    // Apenas alerta, mas permite selecionar para recibo
-    if (pedido?.frete_ja_processado || pedido?.data_pagamento) {
-      alert('⚠️ Este pedido já foi processado. Pode selecionar para gerar recibo, mas não para editar.');
-    }
-  }
+  // ✅ REMOVIDO O ALERTA - permite selecionar sem mensagem chata
+  // if (isChecked) {
+  //   // Apenas alerta, mas permite selecionar para recibo
+  //   if (pedido?.frete_ja_processado || pedido?.data_pagamento) {
+  //     alert('⚠️ Este pedido já foi processado. Pode selecionar para gerar recibo, mas não para editar.');
+  //   }
+  // }
 
   const newSet = new Set(pedidosSelecionados);
   if (isChecked) newSet.add(pedidoId);
