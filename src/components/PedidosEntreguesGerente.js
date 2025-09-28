@@ -173,80 +173,73 @@ export default function PedidosEntreguesGerente({ userProfile }) {
     setTotalSelecionados(total);
   }, [pedidosSelecionados, pedidos]);
 
-  // ==========================================================================
-  // 7. ATUALIZAR PAGAMENTOS DOS PEDIDOS SELECIONADOS
-  // ==========================================================================
-  const atualizarPedidos = async () => {
-    if (pedidosSelecionados.size === 0) {
-      alert('Selecione pelo menos um pedido.');
-      return;
+// ==========================================================================
+// 7. ATUALIZAR PAGAMENTOS DOS PEDIDOS SELECIONADOS (SIMPLES E FUNCIONAL)
+// ==========================================================================
+const atualizarPedidos = async () => {
+  if (pedidosSelecionados.size === 0) {
+    alert('Selecione pelo menos um pedido.');
+    return;
+  }
+  
+  // ✅ VALIDAÇÃO MELHORADA: Verificar se data foi preenchida
+  if (!dataPagamento) {
+    alert('❌ Selecione uma data de pagamento antes de processar.');
+    return;
+  }
+
+  try {
+    const updates = Array.from(pedidosSelecionados).map(async (id) => {
+      const pedido = pedidos.find(p => p.id === id);
+      const fretePago = parseFloat(pedido?.frete_pago) || 0.0;
+
+      // Garantir formato ISO
+      const dataPagamentoISO = new Date(dataPagamento).toISOString().split('T')[0];
+
+      // ✅ VOLTAR AO UPDATE SIMPLES (sem RPC)
+      const { error } = await supabase
+        .from('pedidos')
+        .update({
+          status_pagamento: fretePago > 0,
+          data_pagamento: dataPagamentoISO,
+          frete_pago: fretePago,
+          frete_ja_processado: true
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+    });
+
+    await Promise.all(updates);
+    alert('✅ Pagamentos processados com sucesso! Os valores foram somados aos totais do entregador.');
+    carregarPedidos();
+    // ✅ NÃO LIMPAR A SELEÇÃO - permitir gerar recibo
+    setDataPagamento('');
+  } catch (err) {
+    console.error('Erro ao atualizar pedidos:', err.message);
+    alert('❌ Erro ao processar pagamentos. Verifique o console.');
+  }
+};
+
+// ==========================================================================
+// 8. MANIPULAR SELEÇÃO DE PEDIDOS (CORRIGIDA)
+// ==========================================================================
+const handleSelecionarPedido = (pedidoId, isChecked) => {
+  const pedido = pedidos.find(p => p.id === pedidoId);
+  
+  // ✅ PERMITIR SELECIONAR MESMO PROCESSADOS (apenas bloquear edição)
+  if (isChecked) {
+    // Apenas alerta, mas permite selecionar para recibo
+    if (pedido?.frete_ja_processado || pedido?.data_pagamento) {
+      alert('⚠️ Este pedido já foi processado. Pode selecionar para gerar recibo, mas não para editar.');
     }
-    if (!dataPagamento) {
-      alert('Selecione uma data de pagamento.');
-      return;
-    }
+  }
 
-    // Verificar se algum pedido já foi processado
-    const pedidosJaProcessados = pedidos.filter(p => 
-      pedidosSelecionados.has(p.id) && p.frete_ja_processado === true
-    );
-
-    if (pedidosJaProcessados.length > 0) {
-      alert(`⚠️ ${pedidosJaProcessados.length} pedido(s) já foram processados e não podem ser alterados.`);
-      return;
-    }
-
-    try {
-      const updates = Array.from(pedidosSelecionados).map(async (id) => {
-        const pedido = pedidos.find(p => p.id === id);
-        const fretePago = parseFloat(pedido?.frete_pago) || 0.0;
-
-        // Garantir formato ISO
-        const dataPagamentoISO = new Date(dataPagamento).toISOString().split('T')[0];
-
-        const { error } = await supabase
-          .from('pedidos')
-          .update({
-            status_pagamento: fretePago > 0,
-            data_pagamento: dataPagamentoISO,
-            frete_pago: fretePago,
-            frete_ja_processado: true
-          })
-          .eq('id', id);
-
-        if (error) throw error;
-      });
-
-      await Promise.all(updates);
-      alert('✅ Pagamentos processados com sucesso! Os valores foram somados aos totais do entregador.');
-      carregarPedidos();
-      setPedidosSelecionados(new Set());
-      setDataPagamento('');
-    } catch (err) {
-      console.error('Erro ao atualizar pedidos:', err.message);
-      alert('❌ Erro ao processar pagamentos. Verifique o console.');
-    }
-  };
-
-  // ==========================================================================
-  // 8. MANIPULAR SELEÇÃO DE PEDIDOS (BLOQUEAR JA PROCESSADOS OU COM DATA)
-  // ==========================================================================
-  const handleSelecionarPedido = (pedidoId, isChecked) => {
-    const pedido = pedidos.find(p => p.id === pedidoId);
-    
-    // BLOQUEAR SE: Já processado OU já tem data de pagamento
-    const pedidoBloqueado = pedido?.frete_ja_processado || pedido?.data_pagamento;
-    
-    if (pedidoBloqueado) {
-      alert('⚠️ Este pedido já foi processado e não pode ser alterado.');
-      return;
-    }
-
-    const newSet = new Set(pedidosSelecionados);
-    if (isChecked) newSet.add(pedidoId);
-    else newSet.delete(pedidoId);
-    setPedidosSelecionados(newSet);
-  };
+  const newSet = new Set(pedidosSelecionados);
+  if (isChecked) newSet.add(pedidoId);
+  else newSet.delete(pedidoId);
+  setPedidosSelecionados(newSet);
+};
 
   // ==========================================================================
   // 9. ATUALIZAR VALOR DO FRETE COM FORMATAÇÃO MONETÁRIA
@@ -465,12 +458,17 @@ export default function PedidosEntreguesGerente({ userProfile }) {
               }`}>
                 <div className="flex items-center mb-2">
                   <input
-                    type="checkbox"
-                    checked={pedidosSelecionados.has(pedido.id)}
-                    onChange={(e) => handleSelecionarPedido(pedido.id, e.target.checked)}
-                    className="h-4 w-4 text-purple-600 border-gray-300 rounded"
-                    disabled={pedido.frete_ja_processado}
-                  />
+  type="checkbox"
+  checked={pedidosSelecionados.has(pedido.id)}
+  onChange={(e) => handleSelecionarPedido(pedido.id, e.target.checked)}
+  className="h-4 w-4 text-purple-600 border-gray-300 rounded"
+  // ✅ REMOVER disabled - sempre permitir selecionar
+  title={
+    (pedido.frete_ja_processado || pedido.data_pagamento) 
+      ? 'Pedido processado - pode selecionar para recibo' 
+      : 'Selecionar pedido'
+  }
+/>
                   <div className="flex-1 ml-2">
                     <button
                       onClick={() => abrirModalDetalhes(pedido)}
