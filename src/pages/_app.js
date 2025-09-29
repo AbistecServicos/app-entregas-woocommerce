@@ -16,7 +16,42 @@ function MyApp({ Component, pageProps }) {
   const [userLojas, setUserLojas] = useState([]);
 
   // ============================================================================
-  // 2. FUNÇÃO: CARREGAR LOJAS DO USUÁRIO
+  // 2. FUNÇÃO: REGISTRAR SERVICE WORKER (NOVA FUNÇÃO)
+  // ============================================================================
+  const registerServiceWorker = async () => {
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+          scope: '/'
+        });
+        
+        console.log('✅ Service Worker registrado com sucesso:', registration);
+        
+        // Monitorar estados do Service Worker
+        if (registration.installing) {
+          console.log('🔄 Service Worker instalando...');
+          registration.installing.addEventListener('statechange', (e) => {
+            console.log('📊 Estado do SW:', e.target.state);
+          });
+        } else if (registration.waiting) {
+          console.log('⏳ Service Worker em espera...');
+        } else if (registration.active) {
+          console.log('🎯 Service Worker ATIVO e funcionando!');
+        }
+        
+        return registration;
+      } catch (error) {
+        console.error('❌ Falha ao registrar Service Worker:', error);
+        return null;
+      }
+    } else {
+      console.log('ℹ️ Navegador não suporta Service Worker');
+      return null;
+    }
+  };
+
+  // ============================================================================
+  // 3. FUNÇÃO: CARREGAR LOJAS DO USUÁRIO
   // ============================================================================
   const loadUserLojas = async (userId) => {
     try {
@@ -40,13 +75,28 @@ function MyApp({ Component, pageProps }) {
   };
 
   // ============================================================================
-  // 3. EFFECT: VERIFICAR AUTENTICAÇÃO AO INICIAR
+  // 4. EFFECT: INICIALIZAÇÃO DO APP (NOVO EFFECT)
   // ============================================================================
   useEffect(() => {
-    console.log('🔐 Verificando sessão inicial...');
+    console.log('🚀 Inicializando aplicação...');
     
-    const checkSession = async () => {
+    const initializeApp = async () => {
       try {
+        // ✅ Registrar Service Worker para notificações
+        await registerServiceWorker();
+        
+        // ✅ Verificar autenticação do usuário
+        await checkInitialSession();
+        
+      } catch (error) {
+        console.error('💥 Erro na inicialização do app:', error);
+      }
+    };
+
+    const checkInitialSession = async () => {
+      try {
+        console.log('🔐 Verificando sessão inicial...');
+        
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user) {
@@ -65,11 +115,11 @@ function MyApp({ Component, pageProps }) {
       }
     };
 
-    checkSession();
+    initializeApp();
   }, []);
 
   // ============================================================================
-  // 4. EFFECT: OUVIR MUDANÇAS DE AUTENTICAÇÃO (CORRIGIDO)
+  // 5. EFFECT: OUVIR MUDANÇAS DE AUTENTICAÇÃO
   // ============================================================================
   useEffect(() => {
     console.log('👂 Iniciando listener de autenticação...');
@@ -78,21 +128,16 @@ function MyApp({ Component, pageProps }) {
       async (event, session) => {
         console.log(`🔄 Evento de auth: ${event}`);
         
-        // ✅ BLOCO 4.1: LOGIN
         if (event === 'SIGNED_IN' && session?.user) {
           console.log('🎯 Usuário fez login:', session.user.email);
           setUser(session.user);
           await loadUserLojas(session.user.id);
         } 
-        
-        // ✅ BLOCO 4.2: LOGOUT
         else if (event === 'SIGNED_OUT') {
           console.log('🚪 Usuário fez logout');
           setUser(null);
           setUserLojas([]);
         }
-        
-        // ✅ BLOCO 4.3: OUTROS EVENTOS
         else if (event === 'USER_UPDATED' && session?.user) {
           console.log('📝 Usuário atualizado:', session.user.email);
           setUser(session.user);
@@ -102,7 +147,6 @@ function MyApp({ Component, pageProps }) {
       }
     );
 
-    // ✅ BLOCO 4.4: CLEANUP
     return () => {
       console.log('🧹 Limpando listener de auth');
       subscription?.unsubscribe();
@@ -110,7 +154,7 @@ function MyApp({ Component, pageProps }) {
   }, []);
 
   // ============================================================================
-  // 5. RENDERIZAÇÃO PRINCIPAL
+  // 6. RENDERIZAÇÃO PRINCIPAL
   // ============================================================================
   return (
     <Layout 
