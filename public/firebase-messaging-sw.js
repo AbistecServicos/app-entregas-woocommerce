@@ -2,7 +2,7 @@ importScripts('https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js')
 importScripts('https://www.gstatic.com/firebasejs/9.6.0/firebase-messaging-compat.js');
 
 // ==============================================================================
-// CONFIGURAÇÃO DO FIREBASE NO SERVICE WORKER
+// CONFIGURAÇÃO DO FIREBASE
 // ==============================================================================
 
 const firebaseConfig = {
@@ -15,69 +15,55 @@ const firebaseConfig = {
 };
 
 // ==============================================================================
-// SONS LOCAIS - SEM BLOQUEIO 🎵
-// ==============================================================================
-
-const SONS = {
-  NOTIFICACAO: '/notification.mp3',  // 🔔 Som principal
-  ALERTA: '/alert.mp3',              // 📣 Som alternativo
-  PADRAO: '/notification.mp3'        // ✅ Fallback
-};
-
-// ⚠️ ESCOLHA O SOM PRINCIPAL AQUI:
-const SOM_PRINCIPAL = SONS.NOTIFICACAO;
-
-// ==============================================================================
-// INICIALIZAÇÃO DO FIREBASE NO SERVICE WORKER
+// INICIALIZAÇÃO - COM TRATAMENTO DE ERRO
 // ==============================================================================
 
 try {
-  console.log('🔥 Inicializando Firebase no Service Worker...');
-  firebase.initializeApp(firebaseConfig);
+  console.log('🚀 Service Worker - Iniciando...');
   
+  // Inicializar Firebase
+  firebase.initializeApp(firebaseConfig);
   const messaging = firebase.messaging();
-  console.log('✅ Firebase Messaging inicializado no Service Worker');
+  
+  console.log('✅ Firebase inicializado no Service Worker');
 
   // ============================================================================
-  // 1. BACKGROUND MESSAGES (APP FECHADO)
+  // 1. BACKGROUND MESSAGES (APP FECHADO) - CORRIGIDO
   // ============================================================================
   messaging.onBackgroundMessage((payload) => {
-    console.log('📢 Notificação recebida em background:', payload);
+    console.log('📢 Background message recebida:', payload);
     
-    const notificationTitle = payload.notification?.title || '🆕 Novo Pedido!';
+    // Dados da notificação
+    const notificationTitle = payload.notification?.title || '🚚 Novo Pedido!';
+    const notificationBody = payload.notification?.body || 'Clique para ver detalhes';
+    
+    console.log('🎯 Criando notificação:', { notificationTitle, notificationBody });
 
-    // CONFIGURAÇÃO DA NOTIFICAÇÃO
+    // Opções da notificação
     const notificationOptions = {
-      body: payload.notification?.body || 'Há um novo pedido disponível para entrega',
+      body: notificationBody,
       icon: '/icon-192x192.png',
       badge: '/icon-192x192.png',
-      image: payload.notification?.image,
-      data: {
-        ...payload.data,
-        som: SOM_PRINCIPAL // Incluir som nos dados
-      },
-      tag: 'novo-pedido',
+      data: payload.data || {},
+      tag: `pedido-${Date.now()}`,
       requireInteraction: true,
-      silent: false, // ✅ COM ÁUDIO DO SISTEMA (funciona sempre)
+      silent: false, // ✅ COM SOM
       vibrate: [200, 100, 200],
       actions: [
         {
           action: 'view',
           title: '📋 Ver Pedido'
-        },
-        {
-          action: 'dismiss',
-          title: '❌ Fechar'
         }
       ]
     };
 
-    console.log('🔊 Notificação com áudio do sistema');
-
-    // MOSTRAR NOTIFICAÇÃO
+    // ✅ MOSTRAR NOTIFICAÇÃO
     return self.registration.showNotification(notificationTitle, notificationOptions)
       .then(() => {
-        console.log('✅ Notificação exibida');
+        console.log('✅ Notificação exibida com sucesso');
+        
+        // ✅ TOCAR SOM APÓS EXIBIR NOTIFICAÇÃO
+        return playNotificationSound();
       })
       .catch((error) => {
         console.error('❌ Erro ao exibir notificação:', error);
@@ -85,58 +71,78 @@ try {
   });
 
   // ============================================================================
-  // 2. CLICK NA NOTIFICAÇÃO - COM ÁUDIO PERSONALIZADO
+  // 2. PUSH EVENT (PARA NOTIFICAÇÕES DIRETAS) - CRÍTICO!
+  // ============================================================================
+  self.addEventListener('push', (event) => {
+    console.log('📩 Push event disparado');
+    
+    let payload;
+    try {
+      payload = event.data ? event.data.json() : {};
+      console.log('📦 Payload do push:', payload);
+    } catch (error) {
+      console.error('❌ Erro ao parsear payload:', error);
+      return;
+    }
+
+    const notificationTitle = payload.notification?.title || '🚚 Novo Pedido Disponível!';
+    const notificationBody = payload.notification?.body || 'Há um novo pedido para entrega';
+
+    const notificationOptions = {
+      body: notificationBody,
+      icon: '/icon-192x192.png',
+      badge: '/icon-192x192.png',
+      data: payload.data || {},
+      tag: `push-${Date.now()}`,
+      requireInteraction: true,
+      silent: false,
+      vibrate: [200, 100, 200]
+    };
+
+    // ✅ MOSTRAR NOTIFICAÇÃO E TOCAR SOM
+    event.waitUntil(
+      self.registration.showNotification(notificationTitle, notificationOptions)
+        .then(() => {
+          console.log('✅ Notificação push exibida');
+          return playNotificationSound();
+        })
+        .catch(error => {
+          console.error('❌ Erro na notificação push:', error);
+        })
+    );
+  });
+
+  // ============================================================================
+  // 3. CLICK NA NOTIFICAÇÃO
   // ============================================================================
   self.addEventListener('notificationclick', (event) => {
     console.log('👆 Notificação clicada:', event.notification);
     
-    // ✅ REPRODUZIR SOM NO CLICK (após interação do usuário)
-    try {
-      const som = event.notification.data?.som || SOM_PRINCIPAL;
-      console.log('🎵 Tocando som:', som);
-      
-      // Criar áudio com fallback
-      const audio = new Audio();
-      audio.src = som;
-      audio.volume = 0.6;
-      
-      audio.play()
-        .then(() => console.log('🔊 Som personalizado tocado'))
-        .catch(e => {
-          console.log('🔇 Fallback para som do sistema');
-          // Se falhar, pelo menos o som do sistema já tocou
-        });
-    } catch (e) {
-      console.log('❌ Erro no áudio:', e);
-    }
-
     event.notification.close();
 
-    // REDIRECIONAMENTO (seu código existente)
-    const payloadData = event.notification.data;
+    // Determinar URL de destino
     let targetUrl = '/pedidos-pendentes';
-    
-    if (payloadData && payloadData.tipo === 'pedido_aceito') {
-      targetUrl = '/pedidos-aceitos';
-    } else if (payloadData && payloadData.tipo === 'pedido_entregue') {
-      targetUrl = '/pedidos-entregues';
+    const payloadData = event.notification.data;
+
+    if (payloadData && payloadData.url) {
+      targetUrl = payloadData.url;
     }
 
     if (event.action === 'view') {
       targetUrl = '/pedidos-pendentes';
-    } else if (event.action === 'dismiss') {
-      console.log('❌ Notificação descartada');
-      return;
     }
 
+    // Abrir/focar na página
     event.waitUntil(
       self.clients.matchAll({ type: 'window', includeUncontrolled: true })
         .then((clientList) => {
+          // Tentar focar em janela existente
           for (const client of clientList) {
             if (client.url.includes(targetUrl) && 'focus' in client) {
               return client.focus();
             }
           }
+          // Abrir nova janela
           if (self.clients.openWindow) {
             return self.clients.openWindow(targetUrl);
           }
@@ -145,20 +151,61 @@ try {
   });
 
   // ============================================================================
-  // 3. EVENTOS DO SERVICE WORKER
+  // 4. FUNÇÃO PARA TOCAR SOM - CORRIGIDA
+  // ============================================================================
+  function playNotificationSound() {
+    return new Promise((resolve) => {
+      try {
+        console.log('🎵 Tentando tocar som de notificação...');
+        
+        // Criar contexto de áudio
+        const audioContext = new (self.AudioContext || self.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        // Configurar som
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.5);
+        
+        oscillator.onended = () => {
+          console.log('🔊 Som de notificação tocado');
+          resolve();
+        };
+        
+      } catch (error) {
+        console.log('🔇 Fallback: Som não disponível', error);
+        resolve(); // Resolver mesmo se falhar
+      }
+    });
+  }
+
+  // ============================================================================
+  // 5. EVENTOS DO SERVICE WORKER
   // ============================================================================
   self.addEventListener('install', (event) => {
-    console.log('🔧 Service Worker instalado');
-    self.skipWaiting();
+    console.log('🔧 Service Worker instalado - EntregasWoo');
+    self.skipWaiting(); // Ativar imediatamente
   });
 
   self.addEventListener('activate', (event) => {
-    console.log('🎯 Service Worker ativado');
-    event.waitUntil(self.clients.claim());
+    console.log('🎯 Service Worker ativado - EntregasWoo');
+    event.waitUntil(self.clients.claim()); // Controlar todas as páginas
   });
 
+  console.log('🚀 Service Worker configurado com sucesso!');
+
 } catch (error) {
-  console.error('💥 ERRO CRÍTICO no Service Worker:', error);
+  console.error('💥 ERRO no Service Worker:', error);
 }
 
-console.log('🚀 Service Worker carregado com sons locais!');
+// Log inicial
+console.log('🔔 Service Worker carregado - Pronto para notificações!');

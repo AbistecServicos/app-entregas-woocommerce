@@ -143,67 +143,84 @@ useEffect(() => {
   const relatoriosItem = { path: '/relatorios', icon: '📈', label: 'Relatórios' };
   const adminItem = { path: '/admin', icon: '⚙️', label: 'Administração' };
 
-  // ============================================================================
-  // MONTAGEM CONDICIONAL DOS ITENS (USA DADOS INSTANTÂNEOS)
-  // ============================================================================
-  let menuItems = [homeItem, vendasWooItem];
+// ============================================================================
+// MONTAGEM CONDICIONAL DOS ITENS - CORRIGIDA PARA LOGOUT INSTANTÂNEO
+// ============================================================================
+const getMenuItems = () => {
+  // ✅ SEMPRE mostrar home e vendaswoo (públicas)
+  const publicItems = [homeItem, vendasWooItem];
+  
+  // ✅ Se NÃO tem usuário, retorna apenas itens públicos
+  if (!displayUser) {
+    console.log('🔐 Sidebar - Menu: APENAS itens públicos (usuário não logado)');
+    return publicItems;
+  }
+  
+  // ✅ Se TEM usuário, montar menu completo baseado na role
+  console.log('🔐 Sidebar - Menu: Itens completos para', displayUserRole);
+  
+  const userItems = [perfilItem];
 
-  if (displayUser) {
-    menuItems.push(perfilItem);
-
-    if (displayUserRole === 'entregador') {
-      menuItems.push(pendentesItem, aceitosItem);
-    }
-
-    if (['entregador', 'gerente', 'admin'].includes(displayUserRole)) {
-      menuItems.push(entreguesItem);
-    }
-
-    if (displayUserLojas.length > 0 || displayUserRole === 'admin') {
-      menuItems.push(relatoriosItem);
-    }
-
-    if (['gerente', 'admin'].includes(displayUserRole)) {
-      menuItems.push(gestaoItem, todosItem);
-    }
-
-    if (displayUserRole === 'admin') {
-      menuItems.push(adminItem);
-    }
+  if (displayUserRole === 'entregador') {
+    userItems.push(pendentesItem, aceitosItem);
   }
 
-  // ============================================================================
-  // FUNÇÃO DE LOGOUT CORRIGIDA (SEM RELOAD FORÇADO)
-  // ============================================================================
-  const handleLogout = async () => {
-    try {
-      console.log('🚪 Iniciando logout...');
-      
-      // Fechar sidebar no mobile
-      if (window.innerWidth < 1024) {
-        toggleSidebar();
-      }
-      
-      // ✅ CORREÇÃO: Limpar estado local ANTES do logout
-      setInstantData({
-        user: null,
-        userLojas: [],
-        userRole: 'visitante'
-      });
-      
-      // Realizar logout
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      
-      console.log('✅ Logout realizado com sucesso');
-      
-      // ✅ CORREÇÃO: Redirecionamento limpo
-      await router.push('/');
-      
-    } catch (error) {
-      console.error('❌ Erro ao fazer logout:', error);
+  if (['entregador', 'gerente', 'admin'].includes(displayUserRole)) {
+    userItems.push(entreguesItem);
+  }
+
+  if (displayUserLojas.length > 0 || displayUserRole === 'admin') {
+    userItems.push(relatoriosItem);
+  }
+
+  if (['gerente', 'admin'].includes(displayUserRole)) {
+    userItems.push(gestaoItem, todosItem);
+  }
+
+  if (displayUserRole === 'admin') {
+    userItems.push(adminItem);
+  }
+
+  return [...publicItems, ...userItems];
+};
+
+const menuItems = getMenuItems();
+
+// ============================================================================
+// FUNÇÃO DE LOGOUT CORRIGIDA - LOGOUT INSTANTÂNEO
+// ============================================================================
+const handleLogout = async () => {
+  try {
+    console.log('🚪 Iniciando logout IMEDIATO...');
+    
+    // ✅ 1. Fechar sidebar no mobile
+    if (window.innerWidth < 1024) {
+      toggleSidebar();
     }
-  };
+    
+    // ✅ 2. Limpar estado local IMEDIATAMENTE (CRÍTICO!)
+    setInstantData({
+      user: null,
+      userLojas: [],
+      userRole: 'visitante'
+    });
+    
+    // ✅ 3. Redirecionar IMEDIATAMENTE para home
+    console.log('🎯 Redirecionando para home...');
+    await router.push('/');
+    
+    // ✅ 4. Só então fazer logout (para não bloquear UI)
+    console.log('🔐 Executando signOut...');
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    
+    console.log('✅ Logout realizado com sucesso');
+      
+  } catch (error) {
+    console.error('❌ Erro ao fazer logout:', error);
+    // Mesmo com erro, o usuário já foi redirecionado
+  }
+};
 
   // ============================================================================
   // FUNÇÕES AUXILIARES
