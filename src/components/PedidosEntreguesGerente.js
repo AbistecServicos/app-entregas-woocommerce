@@ -1,3 +1,4 @@
+// components/PedidosEntreguesGerente.js
 // ============================================================================
 // IMPORTAÇÕES
 // ============================================================================
@@ -7,7 +8,7 @@ import { OrderModal, WithCourier } from './OrderModal';
 import { gerarRecibosPDF } from '../utils/pdfUtils';
 
 // ============================================================================
-// COMPONENTE: PEDIDOS ENTREGUES - GERENTE (VERSÃO COM FORMATAÇÃO MONETÁRIA)
+// COMPONENTE: PEDIDOS ENTREGUES - GERENTE (VERSÃO COM FRETE OFERECIDO)
 // ============================================================================
 export default function PedidosEntreguesGerente({ userProfile }) {
   // ==========================================================================
@@ -173,73 +174,59 @@ export default function PedidosEntreguesGerente({ userProfile }) {
     setTotalSelecionados(total);
   }, [pedidosSelecionados, pedidos]);
 
-// ==========================================================================
-// 7. ATUALIZAR PAGAMENTOS DOS PEDIDOS SELECIONADOS (SIMPLES E FUNCIONAL)
-// ==========================================================================
-const atualizarPedidos = async () => {
-  if (pedidosSelecionados.size === 0) {
-    alert('Selecione pelo menos um pedido.');
-    return;
-  }
-  
-  // ✅ VALIDAÇÃO MELHORADA: Verificar se data foi preenchida
-  if (!dataPagamento) {
-    alert('❌ Selecione uma data de pagamento antes de processar.');
-    return;
-  }
+  // ==========================================================================
+  // 7. ATUALIZAR PAGAMENTOS DOS PEDIDOS SELECIONADOS
+  // ==========================================================================
+  const atualizarPedidos = async () => {
+    if (pedidosSelecionados.size === 0) {
+      alert('Selecione pelo menos um pedido.');
+      return;
+    }
+    
+    if (!dataPagamento) {
+      alert('❌ Selecione uma data de pagamento antes de processar.');
+      return;
+    }
 
-  try {
-    const updates = Array.from(pedidosSelecionados).map(async (id) => {
-      const pedido = pedidos.find(p => p.id === id);
-      const fretePago = parseFloat(pedido?.frete_pago) || 0.0;
+    try {
+      const updates = Array.from(pedidosSelecionados).map(async (id) => {
+        const pedido = pedidos.find(p => p.id === id);
+        const fretePago = parseFloat(pedido?.frete_pago) || 0.0;
 
-      // Garantir formato ISO
-      const dataPagamentoISO = new Date(dataPagamento).toISOString().split('T')[0];
+        const dataPagamentoISO = new Date(dataPagamento).toISOString().split('T')[0];
 
-      // ✅ VOLTAR AO UPDATE SIMPLES (sem RPC)
-      const { error } = await supabase
-        .from('pedidos')
-        .update({
-          status_pagamento: fretePago > 0,
-          data_pagamento: dataPagamentoISO,
-          frete_pago: fretePago,
-          frete_ja_processado: true
-        })
-        .eq('id', id);
+        const { error } = await supabase
+          .from('pedidos')
+          .update({
+            status_pagamento: fretePago > 0,
+            data_pagamento: dataPagamentoISO,
+            frete_pago: fretePago,
+            frete_ja_processado: true
+          })
+          .eq('id', id);
 
-      if (error) throw error;
-    });
+        if (error) throw error;
+      });
 
-    await Promise.all(updates);
-    alert('✅ Pagamentos processados com sucesso! Os valores foram somados aos totais do entregador.');
-    carregarPedidos();
-    // ✅ NÃO LIMPAR A SELEÇÃO - permitir gerar recibo
-    setDataPagamento('');
-  } catch (err) {
-    console.error('Erro ao atualizar pedidos:', err.message);
-    alert('❌ Erro ao processar pagamentos. Verifique o console.');
-  }
-};
+      await Promise.all(updates);
+      alert('✅ Pagamentos processados com sucesso! Os valores foram somados aos totais do entregador.');
+      carregarPedidos();
+      setDataPagamento('');
+    } catch (err) {
+      console.error('Erro ao atualizar pedidos:', err.message);
+      alert('❌ Erro ao processar pagamentos. Verifique o console.');
+    }
+  };
 
-// ==========================================================================
-// 8. MANIPULAR SELEÇÃO DE PEDIDOS (CORRIGIDA)
-// ==========================================================================
-const handleSelecionarPedido = (pedidoId, isChecked) => {
-  const pedido = pedidos.find(p => p.id === pedidoId);
-  
-  // ✅ REMOVIDO O ALERTA - permite selecionar sem mensagem chata
-  // if (isChecked) {
-  //   // Apenas alerta, mas permite selecionar para recibo
-  //   if (pedido?.frete_ja_processado || pedido?.data_pagamento) {
-  //     alert('⚠️ Este pedido já foi processado. Pode selecionar para gerar recibo, mas não para editar.');
-  //   }
-  // }
-
-  const newSet = new Set(pedidosSelecionados);
-  if (isChecked) newSet.add(pedidoId);
-  else newSet.delete(pedidoId);
-  setPedidosSelecionados(newSet);
-};
+  // ==========================================================================
+  // 8. MANIPULAR SELEÇÃO DE PEDIDOS
+  // ==========================================================================
+  const handleSelecionarPedido = (pedidoId, isChecked) => {
+    const newSet = new Set(pedidosSelecionados);
+    if (isChecked) newSet.add(pedidoId);
+    else newSet.delete(pedidoId);
+    setPedidosSelecionados(newSet);
+  };
 
   // ==========================================================================
   // 9. ATUALIZAR VALOR DO FRETE COM FORMATAÇÃO MONETÁRIA
@@ -279,10 +266,8 @@ const handleSelecionarPedido = (pedidoId, isChecked) => {
   // 10. MANIPULAR DIGITAÇÃO DO FRETE EM TEMPO REAL
   // ==========================================================================
   const handleFreteChange = (pedidoId, valorDigitado) => {
-    // Aplicar máscara monetária
     const valorFormatado = aplicarMascaraMonetaria(valorDigitado);
     
-    // Salvar valor temporário para exibição
     setValoresEditando(prev => ({
       ...prev,
       [pedidoId]: valorFormatado
@@ -293,10 +278,8 @@ const handleSelecionarPedido = (pedidoId, isChecked) => {
     const valorTemp = valoresEditando[pedidoId];
     
     if (valorTemp !== undefined) {
-      // Salvar o valor quando o usuário sai do campo
       handleAtualizarFrete(pedidoId, valorTemp);
       
-      // Limpar valor temporário após salvar
       setValoresEditando(prev => {
         const newState = { ...prev };
         delete newState[pedidoId];
@@ -345,199 +328,202 @@ const handleSelecionarPedido = (pedidoId, isChecked) => {
     }
   };
 
-// ============================================================================
-// 14. RENDERIZAÇÃO
-// ==========================================================================
-return (
-  <div className="bg-gray-50 min-h-screen p-4">
-    {/* Modal de Detalhes */}
-    <OrderModal
-      pedido={pedidoSelecionado}
-      isOpen={modalAberto}
-      onClose={() => setModalAberto(false)}
-    >
-      <WithCourier
+  // ==========================================================================
+  // 14. RENDERIZAÇÃO
+  // ==========================================================================
+  return (
+    <div className="bg-gray-50 min-h-screen p-4">
+      {/* Modal de Detalhes */}
+      <OrderModal
         pedido={pedidoSelecionado}
+        isOpen={modalAberto}
         onClose={() => setModalAberto(false)}
-      />
-    </OrderModal>
+      >
+        <WithCourier
+          pedido={pedidoSelecionado}
+          onClose={() => setModalAberto(false)}
+        />
+      </OrderModal>
 
-    {/* Cabeçalho com nome da loja */}
-    <div className="bg-white shadow-md rounded-lg p-4 mb-4 sticky top-0 z-10"> {/* MUDANÇA: top-0 para encostar no topo */}
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          {/* MUDANÇA: Títulos menores no mobile */}
-          <h1 className="text-lg md:text-xl font-bold text-purple-800">Pedidos Entregues</h1>
-          <p className="text-xs md:text-sm text-gray-600">
-            Loja: {lojaInfo.loja_nome || lojaInfo.id_loja || 'Não definida'}
+      {/* Cabeçalho com nome da loja */}
+      <div className="bg-white shadow-md rounded-lg p-4 mb-4 sticky top-0 z-10">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h1 className="text-lg md:text-xl font-bold text-purple-800">Pedidos Entregues</h1>
+            <p className="text-xs md:text-sm text-gray-600">
+              Loja: {lojaInfo.loja_nome || lojaInfo.id_loja || 'Não definida'}
+            </p>
+          </div>
+          <div className="flex items-center">
+            <span className="text-sm text-gray-600 mr-2 hidden md:inline">
+              {pedidosSelecionados.size} selecionados
+            </span>
+            <span className="text-sm md:text-lg font-semibold text-green-600">
+              R$ {totalSelecionados.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+        </div>
+
+        {/* Filtros: entregador e status */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+          <select
+            value={filtroEntregador}
+            onChange={(e) => setFiltroEntregador(e.target.value)}
+            className="w-full p-1 md:p-2 border border-gray-300 rounded text-sm md:text-base"
+          >
+            <option value="">Todos Entregadores</option>
+            {entregadores.map((nome, index) => (
+              <option key={index} value={nome}>{nome}</option>
+            ))}
+          </select>
+
+          <select
+            value={filtroStatus}
+            onChange={(e) => setFiltroStatus(e.target.value)}
+            className="w-full p-1 md:p-2 border border-gray-300 rounded text-sm md:text-base"
+          >
+            <option value="">Todos Status</option>
+            <option value="true">Pago</option>
+            <option value="false">Pendente</option>
+            <option value="processado">Processado</option>
+          </select>
+        </div>
+
+        {/* Data + botões de ação */}
+        <div className="flex gap-2 items-center">
+          <input
+            type="date"
+            value={dataPagamento}
+            onChange={(e) => setDataPagamento(e.target.value)}
+            className="flex-grow p-1 md:p-2 border border-gray-300 rounded text-sm md:text-base"
+          />
+          <button
+            onClick={atualizarPedidos}
+            className="bg-purple-600 text-white px-3 md:px-4 py-1 md:py-2 rounded hover:bg-purple-700 text-sm md:text-base"
+            disabled={isLoading}
+          >
+            <span className="md:hidden">Pagar</span>
+            <span className="hidden md:inline">Processar Pagamento</span>
+          </button>
+          <button
+            onClick={() => gerarRecibosPDF(pedidosSelecionados, pedidos)}
+            className="bg-green-600 text-white px-3 md:px-4 py-1 md:py-2 rounded hover:bg-green-700 text-sm md:text-base"
+            disabled={isLoading || pedidosSelecionados.size === 0}
+          >
+            Recibo
+          </button>
+        </div>
+        {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+        
+        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded hidden md:block">
+          <p className="text-sm text-yellow-800">
+            ⚠️ Pedidos com <span className="font-semibold">data de pagamento</span> ou marcados como 
+            <span className="font-semibold"> 🔒 Processado</span> não podem ser alterados
           </p>
         </div>
-        <div className="flex items-center">
-          {/* MUDANÇA: Remover "selecionados" no mobile, mostrar apenas número */}
-          <span className="text-sm text-gray-600 mr-2 hidden md:inline">
-            {pedidosSelecionados.size} selecionados
-          </span>
-          <span className="text-sm md:text-lg font-semibold text-green-600">
-            R$ {totalSelecionados.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </span>
-        </div>
       </div>
 
-      {/* Filtros: entregador e status */}
-      {/* MUDANÇA: Altura reduzida dos campos no mobile */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
-        <select
-          value={filtroEntregador}
-          onChange={(e) => setFiltroEntregador(e.target.value)}
-          className="w-full p-1 md:p-2 border border-gray-300 rounded text-sm md:text-base" // MUDANÇA: p-1 no mobile
-        >
-          <option value="">Todos Entregadores</option>
-          {entregadores.map((nome, index) => (
-            <option key={index} value={nome}>{nome}</option>
-          ))}
-        </select>
-
-        <select
-          value={filtroStatus}
-          onChange={(e) => setFiltroStatus(e.target.value)}
-          className="w-full p-1 md:p-2 border border-gray-300 rounded text-sm md:text-base" // MUDANÇA: p-1 no mobile
-        >
-          <option value="">Todos Status</option>
-          <option value="true">Pago</option>
-          <option value="false">Pendente</option>
-          <option value="processado">Processado</option>
-        </select>
-      </div>
-
-      {/* Data + botões de ação */}
-      <div className="flex gap-2 items-center">
-        {/* MUDANÇA: Campo de data mais compacto no mobile */}
-        <input
-          type="date"
-          value={dataPagamento}
-          onChange={(e) => setDataPagamento(e.target.value)}
-          className="flex-grow p-1 md:p-2 border border-gray-300 rounded text-sm md:text-base" // MUDANÇA: p-1 no mobile
-        />
-        {/* MUDANÇA: Botão "Pagar" no mobile, texto completo no desktop */}
-        <button
-          onClick={atualizarPedidos}
-          className="bg-purple-600 text-white px-3 md:px-4 py-1 md:py-2 rounded hover:bg-purple-700 text-sm md:text-base" // MUDANÇA: py-1 e texto menor
-          disabled={isLoading}
-        >
-          <span className="md:hidden">Pagar</span> {/* MUDANÇA: Texto mobile */}
-          <span className="hidden md:inline">Processar Pagamento</span> {/* Texto desktop */}
-        </button>
-        <button
-          onClick={() => gerarRecibosPDF(pedidosSelecionados, pedidos)}
-          className="bg-green-600 text-white px-3 md:px-4 py-1 md:py-2 rounded hover:bg-green-700 text-sm md:text-base" // MUDANÇA: py-1 e texto menor
-          disabled={isLoading || pedidosSelecionados.size === 0}
-        >
-          Recibo
-        </button>
-      </div>
-      {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
-      
-      {/* MUDANÇA: Remover mensagem de alerta no mobile */}
-      <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded hidden md:block"> {/* MUDANÇA: hidden md:block */}
-        <p className="text-sm text-yellow-800">
-          ⚠️ Pedidos com <span className="font-semibold">data de pagamento</span> ou marcados como 
-          <span className="font-semibold"> 🔒 Processado</span> não podem ser alterados
-        </p>
-      </div>
-    </div>
-
-    {/* Lista de Pedidos */}
-    <div className="container mx-auto px-2">
-      {isLoading ? (
-        <div className="text-center py-8">
-          <p className="text-purple-600">Carregando pedidos...</p>
-        </div>
-      ) : pedidos.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-purple-600">Nenhum pedido encontrado para esta loja.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-3">
-          {pedidos.map(pedido => (
-            <div key={pedido.id} className={`bg-white rounded-lg shadow p-3 ${
-              pedido.frete_ja_processado ? 'border-l-4 border-green-500' : ''
-            }`}>
-              <div className="flex items-center mb-2">
-                <input
-                  type="checkbox"
-                  checked={pedidosSelecionados.has(pedido.id)}
-                  onChange={(e) => handleSelecionarPedido(pedido.id, e.target.checked)}
-                  className="h-4 w-4 text-purple-600 border-gray-300 rounded"
-                  title={
-                    (pedido.frete_ja_processado || pedido.data_pagamento) 
-                      ? 'Pedido processado - pode selecionar para recibo' 
-                      : 'Selecionar pedido'
-                  }
-                />
-                <div className="flex-1 ml-2">
-                  <button
-                    onClick={() => abrirModalDetalhes(pedido)}
-                    className="text-base font-bold text-purple-800 hover:underline text-left"
-                  >
-                    Pedido #{pedido.id_loja_woo}
-                    {pedido.frete_ja_processado && (
-                      <span className="ml-2 text-green-600 text-sm">🔒 Processado</span>
-                    )}
-                  </button>
-                  <p className="text-sm font-semibold text-blue-800">{pedido.loja_nome}</p>
-                </div>
-              </div>
-              <div className="ml-6 space-y-1 text-sm">
-                <p><strong>Entregador:</strong> {pedido.aceito_por_nome || 'Não informado'}</p>
-                <p><strong>Pago em:</strong> {formatarDataParaExibicao(pedido.data_pagamento)}</p>
-                <p>
-                  <strong>Pagamento:</strong>{' '}
-                  {pedido.status_pagamento ? '✅ Pago' : '❌ Pendente'}
-                </p>
-                <p className="flex items-center">
-                  <strong>Frete Pago: R$</strong>
+      {/* Lista de Pedidos */}
+      <div className="container mx-auto px-2">
+        {isLoading ? (
+          <div className="text-center py-8">
+            <p className="text-purple-600">Carregando pedidos...</p>
+          </div>
+        ) : pedidos.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-purple-600">Nenhum pedido encontrado para esta loja.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3">
+            {pedidos.map(pedido => (
+              <div key={pedido.id} className={`bg-white rounded-lg shadow p-3 ${
+                pedido.frete_ja_processado ? 'border-l-4 border-green-500' : ''
+              }`}>
+                <div className="flex items-center mb-2">
                   <input
-                    type="text"
-                    inputMode="decimal"
-                    value={valoresEditando[pedido.id] !== undefined 
-                      ? valoresEditando[pedido.id] 
-                      : formatarParaMoeda(pedido.frete_pago)
-                    }
-                    onChange={(e) => handleFreteChange(pedido.id, e.target.value)}
-                    onBlur={() => handleFreteBlur(pedido.id)}
-                    onKeyPress={(e) => handleFreteKeyPress(e, pedido.id)}
-                    onFocus={(e) => {
-                      e.target.select();
-                      if (valoresEditando[pedido.id] === undefined) {
-                        setValoresEditando(prev => ({
-                          ...prev,
-                          [pedido.id]: formatarParaMoeda(pedido.frete_pago)
-                        }));
-                      }
-                    }}
-                    className={`w-24 p-1 border rounded ml-1 focus:ring-2 ${
-                      (pedido.frete_ja_processado || pedido.data_pagamento) 
-                        ? 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed' 
-                        : 'border-gray-300 focus:ring-purple-500'
-                    }`}
-                    disabled={pedido.frete_ja_processado || pedido.data_pagamento || isLoading}
+                    type="checkbox"
+                    checked={pedidosSelecionados.has(pedido.id)}
+                    onChange={(e) => handleSelecionarPedido(pedido.id, e.target.checked)}
+                    className="h-5 w-5 md:h-4 md:w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
                     title={
                       (pedido.frete_ja_processado || pedido.data_pagamento) 
-                        ? 'Frete já processado - não pode ser alterado' 
-                        : 'Digite o valor (ex: 25,50)'
+                        ? 'Pedido processado - pode selecionar para recibo' 
+                        : 'Selecionar pedido'
                     }
-                    placeholder="0,00"
                   />
-                  {pedido.frete_ja_processado && (
-                    <span className="ml-2 text-xs text-gray-500">(bloqueado)</span>
+                  <div className="flex-1 ml-2">
+                    <button
+                      onClick={() => abrirModalDetalhes(pedido)}
+                      className="text-base font-bold text-purple-800 hover:underline text-left"
+                    >
+                      Pedido #{pedido.id_loja_woo}
+                      {pedido.frete_ja_processado && (
+                        <span className="ml-2 text-green-600 text-sm">🔒 Processado</span>
+                      )}
+                    </button>
+                    <p className="text-sm font-semibold text-blue-800">{pedido.loja_nome}</p>
+                  </div>
+                </div>
+                <div className="ml-6 space-y-1 text-sm">
+                  <p><strong>Entregador:</strong> {pedido.aceito_por_nome || 'Não informado'}</p>
+                  <p><strong>Pago em:</strong> {formatarDataParaExibicao(pedido.data_pagamento)}</p>
+                  <p>
+                    <strong>Pagamento:</strong>{' '}
+                    {pedido.status_pagamento ? '✅ Pago' : '❌ Pendente'}
+                  </p>
+                  
+                  {/* ✅ FRETE OFERECIDO ADICIONADO - SEGUINDO O PADRÃO DO ENTREGADOR */}
+                  {pedido.frete_oferecido && (
+                    <p>
+                      <strong>Frete Oferecido:</strong> R${' '}
+                      {parseFloat(pedido.frete_oferecido).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
                   )}
-                </p>
+                  
+                  <p className="flex items-center">
+                    <strong>Frete Pago: R$</strong>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={valoresEditando[pedido.id] !== undefined 
+                        ? valoresEditando[pedido.id] 
+                        : formatarParaMoeda(pedido.frete_pago)
+                      }
+                      onChange={(e) => handleFreteChange(pedido.id, e.target.value)}
+                      onBlur={() => handleFreteBlur(pedido.id)}
+                      onKeyPress={(e) => handleFreteKeyPress(e, pedido.id)}
+                      onFocus={(e) => {
+                        e.target.select();
+                        if (valoresEditando[pedido.id] === undefined) {
+                          setValoresEditando(prev => ({
+                            ...prev,
+                            [pedido.id]: formatarParaMoeda(pedido.frete_pago)
+                          }));
+                        }
+                      }}
+                      className={`w-24 p-1 border rounded ml-1 focus:ring-2 ${
+                        (pedido.frete_ja_processado || pedido.data_pagamento) 
+                          ? 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed' 
+                          : 'border-gray-300 focus:ring-purple-500'
+                      }`}
+                      disabled={pedido.frete_ja_processado || pedido.data_pagamento || isLoading}
+                      title={
+                        (pedido.frete_ja_processado || pedido.data_pagamento) 
+                          ? 'Frete já processado - não pode ser alterado' 
+                          : 'Digite o valor (ex: 25,50)'
+                      }
+                      placeholder="0,00"
+                    />
+                    {pedido.frete_ja_processado && (
+                      <span className="ml-2 text-xs text-gray-500">(bloqueado)</span>
+                    )}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </div>
-  </div>
   );
 }
