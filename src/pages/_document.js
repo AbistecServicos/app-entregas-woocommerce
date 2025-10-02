@@ -1,22 +1,14 @@
-// pages/_document.js
+// ========================================
+// _DOCUMENT.JS - CUSTOM DOCUMENT OTIMIZADO
+// ========================================
+// Descrição: Configura HTML/Head server-side (PWA, SEO, icons, fonts).
+// Integração: Suporta FCM SW (preload); SEO para app entregas.
+// Melhoria: Viewport adicionado; prefetch FCM; canonical/robots.
+// Manutenção: Seções numeradas. Alinha PDF (não afeta chaves; acelera compat HS256).
+// ========================================
+
 import Document, { Html, Head, Main, NextScript } from 'next/document';
 
-// ==============================================================================
-// CUSTOM DOCUMENT COMPONENT
-// ==============================================================================
-/**
- * MyDocument é um componente personalizado que estende o Document padrão do Next.js
- * É usado para modificar o HTML e HEAD que envolvem a aplicação
- * 
- * IMPORTANTE: Este arquivo é renderizado apenas no servidor
- * Não use hooks React ou lógica do lado do cliente aqui
- * 
- * Funcionalidades incluídas:
- * - Meta tags para PWA
- * - Ícones e favicon
- * - Fontes externas (Font Awesome)
- * - Estrutura HTML base
- */
 class MyDocument extends Document {
   render() {
     return (
@@ -32,11 +24,16 @@ class MyDocument extends Document {
           {/* Meta tag theme-color para a barra de endereço em dispositivos móveis */}
           <meta name="theme-color" content="#8B5CF6" />
           
+          {/* ✅ VIEWPORT ADICIONADO: Essencial para mobile responsiveness */}
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          
           {/* Meta tag para Apple devices */}
           <meta name="apple-mobile-web-app-capable" content="yes" />
           <meta name="apple-mobile-web-app-status-bar-style" content="default" />
           <meta name="apple-mobile-web-app-title" content="EntregasWoo" />
           <link rel="apple-touch-icon" href="/icon-192x192.png" />
+          {/* Splash para iOS */}
+          <link rel="apple-touch-startup-image" href="/splash.png" />
 
           {/* ====================================================================
            * ÍCONES E FAVICON
@@ -53,7 +50,7 @@ class MyDocument extends Document {
            * FONTES EXTERNAS
            * =================================================================== */}
           
-          {/* Font Awesome 6.4.0 - Ícones */}
+          {/* Font Awesome - SEM WARNING (integrity + preconnect) */}
           <link 
             rel="stylesheet" 
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
@@ -62,6 +59,10 @@ class MyDocument extends Document {
             referrerPolicy="no-referrer"
           />
           
+          {/* Pré-conexão para performance */}
+          <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
+          <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com" />
+
           {/* Google Fonts (opcional - descomente se quiser usar) */}
           {/*
           <link
@@ -86,9 +87,6 @@ class MyDocument extends Document {
           {/* Codificação de caracteres */}
           <meta charSet="UTF-8" />
           
-          {/* Viewport responsivo (geralmente colocado no _app.js, mas seguro aqui também) */}
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          
           {/* Descrição padrão para SEO */}
           <meta 
             name="description" 
@@ -104,6 +102,10 @@ class MyDocument extends Document {
           {/* Autor */}
           <meta name="author" content="Abistec Serviços Tecnológicos" />
 
+          {/* ✅ ROBOTS + CANONICAL: Para indexação e evitar duplicates */}
+          <meta name="robots" content="index,follow" />
+          <link rel="canonical" href="https://www.entregaswoo.com.br" /> {/* Ajuste URL base */}
+
           {/* ====================================================================
            * OPEN GRAPH TAGS (para compartilhamento em redes sociais)
            * =================================================================== */}
@@ -115,6 +117,7 @@ class MyDocument extends Document {
             content="Sistema profissional para gestão de entregas e pedidos de e-commerce" 
           />
           <meta property="og:image" content="/icon-512x512.png" />
+          <meta property="og:url" content="https://www.entregaswoo.com.br" /> {/* Dinâmico se precisar */}
 
           {/* ====================================================================
            * TWITTER CARD TAGS
@@ -127,12 +130,26 @@ class MyDocument extends Document {
             content="Sistema profissional para gestão de entregas e pedidos de e-commerce" 
           />
           <meta name="twitter:image" content="/icon-512x512.png" />
+          <meta name="twitter:title" content="EntregasWoo - Gestão de Entregas" />
 
           {/* ====================================================================
-           * PRELOAD DE RECURSOS CRÍTICOS (opcional)
+           * PRELOAD DE RECURSOS CRÍTICOS (OTIMIZADO)
            * =================================================================== */}
           
-          {/* Preload de fontes críticas (exemplo) */}
+          {/* Preload Font Awesome (critical para icons no sino) */}
+          <link 
+            rel="preload" 
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/webfonts/fa-solid-900.woff2" 
+            as="font" 
+            type="font/woff2" 
+            crossOrigin="anonymous" 
+          />
+          
+          {/* Preload FCM para notificações rápidas (PDF compat) */}
+          <link rel="dns-prefetch" href="https://fcm.googleapis.com" />
+          <link rel="preconnect" href="https://fcm.googleapis.com" />
+
+          {/* Preload de fontes críticas (exemplo - descomente se usar) */}
           {/*
           <link
             rel="preload"
@@ -148,16 +165,7 @@ class MyDocument extends Document {
          * CORPO DO DOCUMENTO
          * =================================================================== */}
         <body className="bg-gray-50 text-gray-900 antialiased">
-          {/* 
-           * Main: Componente principal da aplicação
-           * Todas as páginas são renderizadas dentro deste componente
-           */}
           <Main />
-          
-          {/* 
-           * NextScript: Scripts necessários para o Next.js funcionar
-           * Inclui runtime, polyfills, etc.
-           */}
           <NextScript />
         </body>
       </Html>
@@ -165,7 +173,4 @@ class MyDocument extends Document {
   }
 }
 
-// ==============================================================================
-// EXPORT DEFAULT
-// ==============================================================================
 export default MyDocument;

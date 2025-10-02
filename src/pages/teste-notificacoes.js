@@ -131,130 +131,107 @@ export default function TesteNotificacoes() {
     }
   };
 
-const testarNotificacaoSupabase = async () => {
-  try {
-    setStatus('🐛 Iniciando debug detalhado...');
-    
-    // DEBUG 1: Verificar usuário
-    console.log('=== DEBUG 1 - USUÁRIO ===');
-    console.log('👤 User ID:', userProfile?.uid);
-    console.log('👤 User Profile completo:', userProfile);
-    
-    if (!userProfile?.uid) {
-      throw new Error('Usuário não logado ou ID não disponível');
-    }
-
-    // DEBUG 2: Buscar tokens no banco
-    setStatus('🔍 Buscando tokens no banco...');
-    console.log('=== DEBUG 2 - BUSCA NO BANCO ===');
-    
-    const { data: tokens, error: tokensError } = await supabase
-      .from('user_tokens')
-      .select('id, user_id, token, created_at')
-      .eq('user_id', userProfile.uid);
-
-    console.log('📋 Resultado da query:', { 
-      tokens, 
-      tokensError,
-      query: `SELECT * FROM user_tokens WHERE user_id = '${userProfile.uid}'`
-    });
-
-    if (tokensError) {
-      console.error('❌ Erro na query:', tokensError);
-      throw tokensError;
-    }
-
-    if (!tokens || tokens.length === 0) {
-      setStatus('❌ Nenhum token encontrado para este usuário');
-      console.log('⚠️ Nenhum token encontrado para user_id:', userProfile.uid);
-      
-      // Debug: ver todos os tokens da tabela
-      const { data: todosTokens } = await supabase
-        .from('user_tokens')
-        .select('user_id, token')
-        .limit(5);
-      console.log('📊 Primeiros 5 tokens da tabela:', todosTokens);
-      
-      return;
-    }
-
-    // DEBUG 3: Processar tokens
-    console.log('=== DEBUG 3 - PROCESSANDO TOKENS ===');
-    const fcmTokens = tokens.map(t => t.token);
-    console.log('🎯 Tokens extraídos:', fcmTokens);
-    console.log('🔢 Quantidade de tokens:', fcmTokens.length);
-
-    // DEBUG 4: Montar payload
-    const payload = {
-      title: "🎉 Teste de Notificação!",
-      body: "Esta é uma notificação de teste do sistema!",
-      fcmTokens: fcmTokens,
-      data: { 
-        tipo: "teste", 
-        userId: userProfile.uid,
-        timestamp: new Date().toISOString(),
-        url: "/pedidos-pendentes"
-      }
-    };
-
-    console.log('=== DEBUG 4 - PAYLOAD ENVIADO ===');
-    console.log('📤 Payload completo:', JSON.stringify(payload, null, 2));
-    console.log('🔍 fcmTokens no payload:', payload.fcmTokens);
-    console.log('🔢 Tipo de fcmTokens:', typeof payload.fcmTokens);
-    console.log('🔢 É array?', Array.isArray(payload.fcmTokens));
-
-    // DEBUG 5: Chamar a função
-    setStatus('📨 Chamando Edge Function...');
-    console.log('=== DEBUG 5 - CHAMANDO FUNÇÃO ===');
-    
-    const { data, error } = await supabase.functions.invoke('send-notification', {
-      body: payload
-    });
-
-    console.log('=== DEBUG 6 - RESPOSTA DA FUNÇÃO ===');
-    console.log('📥 Resposta completa:', { data, error });
-    
-    if (error) {
-      console.error('❌ Erro na chamada:', error);
-      console.log('🔍 Status do erro:', error.status);
-      console.log('🔍 Mensagem do erro:', error.message);
-      console.log('🔍 Contexto do erro:', error.context);
-      
-      throw error;
-    }
-
-    setStatus(`✅ Sucesso! Notificação enviada para ${fcmTokens.length} dispositivo(s)`);
-    console.log('🎉 Notificação enviada com sucesso!', data);
-
-  } catch (error) {
-    console.error('💥 ERRO FINAL:', error);
-    setStatus(`❌ Erro: ${error.message}`);
-    
-    // Debug adicional do erro
-    if (error.message.includes('Lista de tokens FCM é obrigatória')) {
-      setStatus(prev => prev + '\n⚠️ A função não está recebendo os tokens corretamente');
-    }
-  }
-};
-
-  const verificarTokensBanco = async () => {
+  const testarNotificacaoSupabase = async () => {
     try {
-      const { data, error } = await supabase
-        .from('user_tokens')
-        .select('*')
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
+      setStatus('🐛 Iniciando debug detalhado...');
       
-      setTokensBanco(data || []);
-      return data;
+      // DEBUG 1: Verificar usuário
+      console.log('=== DEBUG 1 - USUÁRIO ===');
+      console.log('👤 User ID:', userProfile?.uid);
+      console.log('👤 User Profile completo:', userProfile);
+      
+      if (!userProfile?.uid) {
+        throw new Error('Usuário não logado ou ID não disponível');
+      }
+
+      // DEBUG 2: Buscar tokens no banco
+      setStatus('🔍 Buscando tokens no banco...');
+      console.log('=== DEBUG 2 - BUSCA NO BANCO ===');
+      
+      const { data: tokens, error: tokensError } = await supabase
+        .from('user_tokens')
+        .select('id, user_id, token, created_at')
+        .eq('user_id', userProfile.uid);
+
+      console.log('📋 Resultado da query:', { 
+        tokens, 
+        tokensError,
+        query: `SELECT * FROM user_tokens WHERE user_id = '${userProfile.uid}'`
+      });
+
+      if (tokensError) {
+        console.error('❌ Erro na query:', tokensError);
+        throw tokensError;
+      }
+
+      if (!tokens || tokens.length === 0) {
+        setStatus('❌ Nenhum token encontrado para este usuário');
+        console.log('⚠️ Nenhum token encontrado para user_id:', userProfile.uid);
+        return;
+      }
+
+      // DEBUG 3: Processar tokens
+      console.log('=== DEBUG 3 - PROCESSANDO TOKENS ===');
+      const fcmTokens = tokens.map(t => t.token);
+      console.log('🎯 Tokens extraídos:', fcmTokens);
+      console.log('🔢 Quantidade de tokens:', fcmTokens.length);
+
+      // DEBUG 4: Montar payload
+      const payload = {
+        title: "🎉 Teste de Notificação!",
+        body: "Esta é uma notificação de teste do sistema!",
+        fcmTokens: fcmTokens,
+        data: { 
+          tipo: "teste", 
+          userId: userProfile.uid,
+          timestamp: new Date().toISOString(),
+          url: "/pedidos-pendentes"
+        }
+      };
+
+      console.log('=== DEBUG 4 - PAYLOAD ENVIADO ===');
+      console.log('📤 Payload completo:', JSON.stringify(payload, null, 2));
+
+      // DEBUG 5: Chamar a função COM AUTENTICAÇÃO
+      setStatus('📨 Chamando Edge Function...');
+      console.log('=== DEBUG 5 - CHAMANDO FUNÇÃO ===');
+      
+      // Obter a sessão atual para autenticação
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const { data, error } = await supabase.functions.invoke('send-notification', {
+        body: payload,
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+
+      console.log('=== DEBUG 6 - RESPOSTA DA FUNÇÃO ===');
+      console.log('📥 Resposta completa:', { data, error });
+      
+      if (error) {
+        console.error('❌ Erro na chamada:', error);
+        console.log('🔍 Status do erro:', error.status);
+        console.log('🔍 Mensagem do erro:', error.message);
+        console.log('🔍 Contexto do erro:', error.context);
+        
+        throw error;
+      }
+
+      setStatus(`✅ Sucesso! Notificação enviada para ${fcmTokens.length} dispositivo(s)`);
+      console.log('🎉 Notificação enviada com sucesso!', data);
+
     } catch (error) {
-      console.error('Erro:', error);
-      throw error;
+      console.error('💥 ERRO FINAL:', error);
+      setStatus(`❌ Erro: ${error.message}`);
     }
   };
 
-  // 🔍 AQUI ESTÁ A FUNÇÃO debugTokens - COLOQUEI ANTES DA testarNotificacaoLocal
+  // 🔍 FUNÇÃO DEBUG TOKENS
   const debugTokens = async () => {
     try {
       setStatus('🔍 Debugando tokens...');
@@ -271,6 +248,68 @@ const testarNotificacaoSupabase = async () => {
       
     } catch (error) {
       setStatus(`❌ Debug error: ${error.message}`);
+    }
+  };
+
+  // 🎯 NOVA FUNÇÃO: TESTE DIRETO SUPABASE
+  const testeDiretoSupabase = async () => {
+    try {
+      setStatus('🎯 Teste direto Supabase...');
+      
+      // 1. Buscar tokens manualmente
+      const { data: tokens, error } = await supabase
+        .from('user_tokens')
+        .select('token')
+        .eq('user_id', userProfile.uid)
+        .limit(1);
+
+      if (error || !tokens?.[0]) {
+        setStatus('❌ Nenhum token encontrado');
+        return;
+      }
+
+      const testToken = tokens[0].token;
+      
+      // 2. Testar com curl simulado
+      const payload = {
+        title: "TESTE DIRETO",
+        body: "Testando via função",
+        fcmTokens: [testToken],
+        data: { teste: "direto" }
+      };
+
+      setStatus('📤 Enviando para Supabase...');
+      
+      const { data, error: funcError } = await supabase.functions.invoke('send-notification', {
+        body: payload
+      });
+
+      if (funcError) {
+        setStatus(`❌ Erro função: ${funcError.message}`);
+        console.error('Erro detalhado:', funcError);
+      } else {
+        setStatus(`✅ Resposta: ${JSON.stringify(data)}`);
+      }
+
+    } catch (error) {
+      setStatus(`💥 Erro: ${error.message}`);
+    }
+  };
+
+  const verificarTokensBanco = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_tokens')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+      
+      setTokensBanco(data || []);
+      return data;
+    } catch (error) {
+      console.error('Erro:', error);
+      throw error;
     }
   };
 
@@ -397,7 +436,7 @@ const testarNotificacaoSupabase = async () => {
         </div>
       </div>
 
-      {/* Botões de ação - AQUI ADICIONE O BOTÃO DEBUG */}
+      {/* Botões de ação - COM NOVO BOTÃO ADICIONADO */}
       <div style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -410,6 +449,12 @@ const testarNotificacaoSupabase = async () => {
         <button onClick={testarNotificacaoSupabase} style={buttonStyle} disabled={!token}>
           📨 2. Testar Notificação
         </button>
+        
+        {/* 🎯 NOVO BOTÃO ADICIONADO AQUI */}
+        <button onClick={testeDiretoSupabase} style={buttonStyle} disabled={!userProfile?.uid}>
+          🎯 Teste Direto
+        </button>
+        
         <button onClick={testarNotificacaoLocal} style={buttonStyle} 
                 disabled={!isClient || notificationPermission !== 'granted'}>
           🔔 3. Teste Local
@@ -420,7 +465,6 @@ const testarNotificacaoSupabase = async () => {
           📊 4. Verificar Banco
         </button>
         
-        {/* 🔍 BOTÃO DEBUG ADICIONADO AQUI */}
         <button onClick={debugTokens} style={buttonStyleSecondary}>
           🐛 5. Debug Tokens
         </button>

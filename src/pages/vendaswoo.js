@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
+import Script from 'next/script';
 
 // ==============================================================================
 // PÁGINA VENDAS WOO - FANPAGE PARA CAPTAÇÃO DE CLIENTES
@@ -48,8 +49,14 @@ export default function VendasWoo() {
       <Head>
         <title>Informatize seu negócio e aumente seus lucros com pequeno investimento</title>
         <meta name="description" content="Sua loja virtual profissional com gestão simplificada e suporte especializado" />
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
       </Head>
+
+      {/* Carregamento correto do Font Awesome usando next/script */}
+      <Script
+        src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"
+        strategy="afterInteractive"
+        crossOrigin="anonymous"
+      />
 
       <div className={`min-h-screen bg-gray-50 transition-opacity duration-500 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
         <div className="max-w-6xl mx-auto px-4 py-8">
@@ -57,22 +64,22 @@ export default function VendasWoo() {
           {/* ================================================================== */}
           {/* HEADER PRINCIPAL */}
           {/* ================================================================== */}
-{/* HEADER PRINCIPAL - VERSÃO OTIMIZADA */}
-<header className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white rounded-2xl p-4 sm:p-6 md:p-8 text-center shadow-xl mb-8">
-  <div className="logo-container mb-3 sm:mb-4 md:mb-6">
-    <img 
-      src="https://midias.abistec.com.br/logo_abistec_email.png" 
-      alt="Abistec Serviços Tecnológicos" 
-      className="max-w-[18rem] sm:max-w-[12rem] md:max-w-[15rem] lg:max-w-[18rem] xl:max-w-[20rem] mx-auto"
-    />
-  </div>
-  <h1 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 text-shadow px-2">
-    Informatize seu negócio e aumente seus lucros com pequeno investimento
-  </h1>
-  <p className="text-sm sm:text-lg md:text-xl lg:text-2xl opacity-90 max-w-4xl mx-auto px-4">
-    Sua loja virtual profissional com gestão simplificada e suporte especializado
-  </p>
-</header>
+          {/* HEADER PRINCIPAL - VERSÃO OTIMIZADA */}
+          <header className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white rounded-2xl p-4 sm:p-6 md:p-8 text-center shadow-xl mb-8">
+            <div className="logo-container mb-3 sm:mb-4 md:mb-6">
+              <img 
+                src="https://midias.abistec.com.br/logo_abistec_email.png" 
+                alt="Abistec Serviços Tecnológicos" 
+                className="max-w-[18rem] sm:max-w-[12rem] md:max-w-[15rem] lg:max-w-[18rem] xl:max-w-[20rem] mx-auto"
+              />
+            </div>
+            <h1 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 text-shadow px-2">
+              Informatize seu negócio e aumente seus lucros com pequeno investimento
+            </h1>
+            <p className="text-sm sm:text-lg md:text-xl lg:text-2xl opacity-90 max-w-4xl mx-auto px-4">
+              Sua loja virtual profissional com gestão simplificada e suporte especializado
+            </p>
+          </header>
 
           {/* ================================================================== */}
           {/* TÍTULO DA SEÇÃO DE FUNCIONALIDADES */}

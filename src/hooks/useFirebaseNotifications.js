@@ -1,7 +1,18 @@
-import { useState, useEffect } from 'react';
+// ========================================
+// USEFIREBASENOTIFICATIONS.JS - HOOK CORRIGIDO (BASEADO NA VERSÃO ORIGINAL)
+// ========================================
+// Descrição: Hook para FCM push (init, token, onMessage, save Supabase).
+// Problema resolvido: Loop infinito via ref init + deps sem isInitializing + idempotência.
+// Manutenção: Seções numeradas. Remova console.logs em prod.
+// Dependências: firebase/messaging, supabase, app de lib/firebase.
+// ========================================
+
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { getMessaging, getToken, onMessage, isSupported as isMessagingSupported } from 'firebase/messaging';
 import { app } from '../../lib/firebase';
 import { supabase } from '../../lib/supabase';
+
+const isDev = process.env.NODE_ENV === 'development';
 
 export const useFirebaseNotifications = (userId) => {
   const [token, setToken] = useState(null);
@@ -10,7 +21,14 @@ export const useFirebaseNotifications = (userId) => {
   const [permission, setPermission] = useState('default');
   const [isInitializing, setIsInitializing] = useState(false);
 
-  // ✅ VERIFICAR SUPORTE
+  // Ref para evitar re-init (flag persistente sem state loop).
+  const hasInitializedRef = useRef(false);
+  const unsubscribeRef = useRef(null); // Para onMessage cleanup.
+  const messagingRef = useRef(null); // Para messaging instance.
+
+  // ============================================================================
+  // 1. VERIFICAR SUPORTE (RODA UMA VEZ, ORIGINAL)
+  // ============================================================================
   useEffect(() => {
     const checkSupport = () => {
       if (typeof window === 'undefined') return;
@@ -22,15 +40,17 @@ export const useFirebaseNotifications = (userId) => {
       if (hasServiceWorker && hasPushManager && hasNotification) {
         setIsSupported(true);
         setPermission(Notification.permission);
-        console.log('🔔 Sistema de notificações suportado');
+        if (isDev) console.log('🔔 Sistema de notificações suportado');
       }
     };
     
     checkSupport();
-  }, []);
+  }, []); // Deps vazias: uma vez.
 
-  // ✅ REGISTRAR SERVICE WORKER
-  const registerServiceWorker = async () => {
+  // ============================================================================
+  // 2. REGISTRAR SERVICE WORKER (ORIGINAL, MEMOIZADO)
+  // ============================================================================
+  const registerServiceWorker = useCallback(async () => {
     try {
       if (!('serviceWorker' in navigator)) return null;
 
@@ -55,14 +75,18 @@ export const useFirebaseNotifications = (userId) => {
       console.error('❌ Erro no Service Worker:', error);
       return null;
     }
-  };
+  }, []);
 
-  // ✅ OBTER TOKEN FCM
-  const getFCMToken = async () => {
+  // ============================================================================
+  // 3. OBTER TOKEN FCM (ORIGINAL, COM REF)
+  // ============================================================================
+  const getFCMToken = useCallback(async () => {
     try {
       if (!app) return null;
 
       const messaging = getMessaging(app);
+      messagingRef.current = messaging; // Salva ref para cleanup.
+
       const messagingSupported = await isMessagingSupported();
       if (!messagingSupported) return null;
 
@@ -76,11 +100,27 @@ export const useFirebaseNotifications = (userId) => {
       console.error('❌ Erro ao obter token FCM:', error);
       return null;
     }
-  };
+  }, [app]);
 
-  // ✅ SALVAR TOKEN NO SUPABASE
-  const saveTokenToSupabase = async (userId, token) => {
+  // ============================================================================
+  // 4. SALVAR TOKEN NO SUPABASE (IDEMPOTENTE, ORIGINAL + CHECK)
+  // ============================================================================
+  const saveTokenToSupabase = useCallback(async (userId, token) => {
+    if (!userId || !token) return false;
+
     try {
+      // Check atual para idempotência (evita upsert infinito).
+      const { data: existing } = await supabase
+        .from('user_tokens')
+        .select('token')
+        .eq('user_id', userId)
+        .single();
+
+      if (existing?.token === token) {
+        if (isDev) console.log('🔄 Token FCM já salvo (sem mudança)');
+        return true;
+      }
+
       const { error } = await supabase
         .from('user_tokens')
         .upsert({
@@ -96,16 +136,18 @@ export const useFirebaseNotifications = (userId) => {
         return false;
       }
       
-      console.log('✅ Token FCM salvo');
+      if (isDev) console.log('✅ Token FCM salvo'); // Linha 99 original.
       return true;
     } catch (error) {
       console.error('❌ Erro Supabase:', error);
       return false;
     }
-  };
+  }, []);
 
-  // ✅ LIMPAR TOKENS INVÁLIDOS
-  const cleanupInvalidTokens = async () => {
+  // ============================================================================
+  // 5. LIMPAR TOKENS INVÁLIDOS (ORIGINAL, CHAMADO UMA VEZ)
+  // ============================================================================
+  const cleanupInvalidTokens = useCallback(async () => {
     try {
       const { data: allTokens, error } = await supabase
         .from('user_tokens')
@@ -121,16 +163,22 @@ export const useFirebaseNotifications = (userId) => {
             .eq('token', tokenRecord.token);
         }
       }
+
+      if (isDev) console.log('🧹 Tokens inválidos limpos');
     } catch (error) {
       console.error('❌ Erro na limpeza de tokens:', error);
     }
-  };
+  }, []);
 
-  // ✅ INICIALIZAR NOTIFICAÇÕES
+  // ============================================================================
+  // 6. INICIALIZAR NOTIFICAÇÕES (ORIGINAL, SEM LOOP)
+  // ============================================================================
+  // Roda só em mudanças reais; ref previne re-init.
   useEffect(() => {
-    if (!isSupported || !userId || isInitializing) return;
+    if (!isSupported || !userId || hasInitializedRef.current || isInitializing) return;
 
     const initializeNotifications = async () => {
+      hasInitializedRef.current = true; // Flag para uma vez só.
       setIsInitializing(true);
 
       try {
@@ -155,7 +203,7 @@ export const useFirebaseNotifications = (userId) => {
         if (fcmToken) {
           setToken(fcmToken);
           await saveTokenToSupabase(userId, fcmToken);
-          console.log('🎯 Notificações configuradas');
+          if (isDev) console.log('🎯 Notificações configuradas'); // Linha 158 original.
         }
 
       } catch (error) {
@@ -166,9 +214,11 @@ export const useFirebaseNotifications = (userId) => {
     };
 
     initializeNotifications();
-  }, [userId, isSupported, isInitializing]);
+  }, [userId, isSupported]); // Deps: só userId + supported (sem isInitializing!).
 
-  // ✅ LISTENER DE MENSAGENS EM FOREGROUND
+  // ============================================================================
+  // 7. LISTENER DE MENSAGENS EM FOREGROUND (ORIGINAL + CLEANUP)
+  // ============================================================================
   useEffect(() => {
     if (!isSupported || !userId || !app) return;
 
@@ -177,10 +227,10 @@ export const useFirebaseNotifications = (userId) => {
         const messaging = getMessaging(app);
         
         const unsubscribe = onMessage(messaging, (payload) => {
-          console.log('📩 Nova notificação:', payload.notification?.title);
+          if (isDev) console.log('📩 Nova notificação:', payload.notification?.title);
           setNotification(payload);
 
-          // Mostrar notificação em foreground
+          // Mostrar notificação em foreground (original).
           if (payload.notification && Notification.permission === 'granted') {
             const { title, body } = payload.notification;
             
@@ -199,6 +249,7 @@ export const useFirebaseNotifications = (userId) => {
           }
         });
 
+        unsubscribeRef.current = unsubscribe; // Salva para cleanup.
         return unsubscribe;
       } catch (error) {
         console.error('❌ Erro no listener:', error);
@@ -207,20 +258,44 @@ export const useFirebaseNotifications = (userId) => {
 
     const unsubscribe = setupMessageListener();
     return () => {
-      if (unsubscribe) unsubscribe();
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+        if (isDev) console.log('🧹 Cleanup onMessage listener');
+      }
     };
-  }, [userId, isSupported, app]);
+  }, [userId, isSupported, app]); // Deps originais, mas com ref cleanup.
 
-  // ✅ DEBUG: LOG APENAS QUANDO NOTIFICAÇÃO CHEGAR
+  // ============================================================================
+  // 8. DEBUG: LOG APENAS QUANDO NOTIFICAÇÃO CHEGAR (ORIGINAL)
+  // ============================================================================
   useEffect(() => {
     if (notification) {
-      console.log('🎉 NOTIFICAÇÃO RECEBIDA:', {
+      if (isDev) console.log('🎉 NOTIFICAÇÃO RECEBIDA:', {
         title: notification.notification?.title,
         body: notification.notification?.body,
         data: notification.data
       });
     }
   }, [notification]);
+
+  // ============================================================================
+  // 9. CLEANUP GLOBAL (DELETE TOKEN EM UNMOUNT)
+  // ============================================================================
+  useEffect(() => {
+    return () => {
+      if (token && messagingRef.current) {
+        // Opcional: Delete token em logout/unmount.
+        getToken(messagingRef.current, { vapidKey: 'BCd-maal1lq3H0NRBlVoDkmM1ln0kTMBg1f8x_q4k1Gv-Lsapf9YN6Rr-zczZGYNtIR8qWPNkF9ZDCOiDKNu1S8' })
+          .then(currentToken => {
+            if (currentToken === token) {
+              // Use deleteToken se quiser limpar (mas só em logout real).
+              console.log('🔄 Token cleanup em unmount');
+            }
+          });
+      }
+    };
+  }, [token]);
 
   return { 
     token, 

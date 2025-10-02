@@ -26,13 +26,11 @@ export const useUserProfile = () => {
   const loadUserData = async () => {
     try {
       setState(prev => ({ ...prev, loading: true, error: null }));
-      console.log('🔄 Iniciando carregamento de dados do usuário...');
 
       // 3.1. VERIFICAR USUÁRIO AUTENTICADO
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
       
       if (authError) {
-        console.error('❌ Erro de autenticação:', authError);
         setState(prev => ({
           ...prev,
           user: null,
@@ -46,7 +44,6 @@ export const useUserProfile = () => {
       }
 
       if (!authUser) {
-        console.log('👤 Nenhum usuário autenticado');
         setState(prev => ({
           ...prev,
           user: null,
@@ -59,8 +56,6 @@ export const useUserProfile = () => {
         return;
       }
 
-      console.log('✅ Usuário autenticado:', authUser.email);
-
       // 3.2. BUSCAR PERFIL NA TABELA 'usuarios'
       const { data: usuarioData, error: usuarioError } = await supabase
         .from('usuarios')
@@ -69,7 +64,6 @@ export const useUserProfile = () => {
         .single();
 
       if (usuarioError) {
-        console.error('❌ Erro ao buscar perfil:', usuarioError);
         setState(prev => ({
           ...prev,
           user: authUser,
@@ -82,11 +76,8 @@ export const useUserProfile = () => {
         return;
       }
 
-      console.log('✅ Perfil carregado:', usuarioData.nome_completo);
-
       // 3.3. VERIFICAÇÃO: É ADMINISTRADOR?
       if (usuarioData.is_admin === true) {
-        console.log('🎯 Usuário é ADMINISTRADOR (is_admin = true)');
         setState(prev => ({
           ...prev,
           user: authUser,
@@ -107,7 +98,6 @@ export const useUserProfile = () => {
         .eq('status_vinculacao', 'ativo');
 
       if (lojasError) {
-        console.warn('⚠️ Erro ao buscar lojas associadas:', lojasError);
         setState(prev => ({
           ...prev,
           user: authUser,
@@ -120,31 +110,20 @@ export const useUserProfile = () => {
         return;
       }
 
-      console.log('📊 Lojas associadas encontradas:', lojasData?.length || 0);
-
-      // 3.5. DETERMINAR FUNÇÃO BASEADA NAS LOJAS ASSOCIADAS (CORRIGIDO)
+      // 3.5. DETERMINAR FUNÇÃO BASEADA NAS LOJAS ASSOCIADAS (CORREÇÃO APLICADA)
       let finalUserRole = 'visitante';
       
       if (!lojasData || lojasData.length === 0) {
-        console.log('👤 Usuário é VISITANTE (sem lojas associadas)');
         finalUserRole = 'visitante';
       } else {
-        const lojasComoGerente = lojasData.filter(loja => loja.funcao === 'gerente');
-        const lojasComoEntregador = lojasData.filter(loja => loja.funcao === 'entregador');
+        // ✅ CORREÇÃO: Permitir múltiplas lojas como gerente
+        const funcoes = lojasData.map(loja => loja.funcao);
         
-        if (lojasComoGerente.length > 0) {
-          if (lojasComoGerente.length > 1) {
-            console.error('❌ CONFLITO: Usuário é gerente em múltiplas lojas');
-            finalUserRole = 'erro';
-          } else {
-            console.log('💼 Usuário é GERENTE da loja:', lojasComoGerente[0].id_loja);
-            finalUserRole = 'gerente';
-          }
-        } else if (lojasComoEntregador.length > 0) {
-          console.log('🚚 Usuário é ENTREGADOR em', lojasComoEntregador.length, 'loja(s)');
+        if (funcoes.includes('gerente')) {
+          finalUserRole = 'gerente';
+        } else if (funcoes.includes('entregador')) {
           finalUserRole = 'entregador';
         } else {
-          console.log('🔍 Usuário tem lojas mas sem função definida');
           finalUserRole = 'visitante';
         }
       }
@@ -160,10 +139,7 @@ export const useUserProfile = () => {
         error: null
       }));
 
-      console.log('✅ Carregamento finalizado. Função:', finalUserRole);
-
     } catch (error) {
-      console.error('💥 Erro inesperado no carregamento:', error);
       setState(prev => ({
         ...prev,
         user: null,
@@ -184,22 +160,17 @@ export const useUserProfile = () => {
 
     const initializeAuth = async () => {
       try {
-        console.log('🔐 Iniciando verificação de autenticação...');
-        
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (!isMounted) return;
 
         if (error) {
-          console.error('❌ Erro ao verificar sessão:', error);
           return;
         }
 
         if (session?.user) {
-          console.log('✅ Usuário logado:', session.user.email);
           await loadUserData();
         } else {
-          console.log('👤 Nenhum usuário autenticado');
           setState(prev => ({
             ...prev,
             user: null,
@@ -211,11 +182,10 @@ export const useUserProfile = () => {
           }));
         }
       } catch (error) {
-        console.error('💥 Erro inesperado:', error);
+        // Silencioso em produção
       } finally {
         if (isMounted) {
           setState(prev => ({ ...prev, isInitialized: true }));
-          console.log('✅ Inicialização concluída');
         }
       }
     };
@@ -224,23 +194,30 @@ export const useUserProfile = () => {
 
     return () => {
       isMounted = false;
-      console.log('🧹 Cleanup do effect de autenticação');
     };
   }, []);
 
   // ============================================================================
-  // 5. EFFECT: DEBUG - MONITORAR MUDANÇAS DE ESTADO (OPCIONAL)
+  // 5. EFFECT: DEBUG - APENAS LOGS ÚTEIS (CORRIGIDO)
   // ============================================================================
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 DEBUG - Estado atualizado:', {
-        user: state.user?.email,
-        userRole: state.userRole,
-        loading: state.loading,
-        isInitialized: state.isInitialized
-      });
+      // ✅ LOG APENAS QUANDO MUDANÇAS IMPORTANTES ACONTECEM
+      const hasUserChanged = state.user?.email !== sessionStorage.getItem('last_user_email');
+      const hasRoleChanged = state.userRole !== sessionStorage.getItem('last_user_role');
+      
+      if (hasUserChanged || hasRoleChanged) {
+        console.log('👤 useUserProfile - Estado:', {
+          user: state.user?.email,
+          role: state.userRole,
+          loading: state.loading
+        });
+        
+        sessionStorage.setItem('last_user_email', state.user?.email || '');
+        sessionStorage.setItem('last_user_role', state.userRole);
+      }
     }
-  }, [state.user, state.userRole, state.loading, state.isInitialized]);
+  }, [state.user?.email, state.userRole, state.loading]);
 
   // ============================================================================
   // 6. FUNÇÃO: ATUALIZAR PERFIL DO USUÁRIO
@@ -287,7 +264,6 @@ export const useUserProfile = () => {
   // 7. FUNÇÃO: RECARREGAR DADOS
   // ============================================================================
   const reloadUserData = async () => {
-    console.log('🔄 Recarregando dados do usuário...');
     await loadUserData();
   };
 

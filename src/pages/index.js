@@ -44,10 +44,13 @@ export default function HomePage() {
 
   return (
     <>
-      {/* Configuração do cabeçalho HTML com título e importação de Font Awesome */}
+      {/* ✅ CORREÇÃO: Removido Font Awesome do Head - Agora está no _document.js */}
       <Head>
         <title>VendasWoo + EntregasWoo - Sistema Completo para E-commerce e Entregas</title>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+        {/* ❌ REMOVIDO: <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" /> */}
+        
+        {/* ✅ Viewport para responsividade */}
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
 
       {/* Cabeçalho da página com apenas o título */}

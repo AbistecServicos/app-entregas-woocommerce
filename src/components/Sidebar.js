@@ -1,22 +1,32 @@
-// components/Sidebar.js
-import { useEffect, useState } from 'react';
+// ========================================
+// SIDEBAR.JS - COMPONENTE CORRIGIDO
+// ========================================
+// Descrição: Sidebar responsivo com menu role-based para app de entregas.
+// Problema resolvido: Loop infinito de re-renders via memoização e logs otimizados.
+// Manutenção: Seções numeradas para navegação rápida. Remova console.logs em produção.
+// Dependências: Next.js, Supabase, hooks custom.
+// ========================================
+
+// ===== 1. IMPORTS E PROPS =====
+// Importa hooks e componentes necessários.
+// Props: Recebe de Layout para dados iniciais (user, lojas).
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabase';
 import { useUserProfile } from '../hooks/useUserProfile';
 import UserProfile from './UserProfile';
 
-// ✅ CORREÇÃO: RECEBER PROPS DO LAYOUT
 const Sidebar = ({ 
   isOpen, 
   toggleSidebar,
-  user = null, // ← do _app.js via Layout
-  isLoading = false, // ← do _app.js via Layout  
-  userLojas = [] // ← do _app.js via Layout
+  user = null,
+  isLoading = false,
+  userLojas = []
 }) => {
   const router = useRouter();
   
-  // ✅ HOOK PARA DADOS COMPLETOS (USADO COMO FALLBACK)
+  // Hook para dados completos do perfil (fallback se props falharem).
   const { 
     user: hookUser, 
     userProfile, 
@@ -26,112 +36,107 @@ const Sidebar = ({
     error 
   } = useUserProfile();
   
-  // ✅ ESTADO PARA DADOS INSTANTÂNEOS
+  // Estado local para dados "instantâneos" (rápidos, sem await).
   const [instantData, setInstantData] = useState({
     user: null,
     userLojas: [],
     userRole: 'visitante'
   });
 
-  // ============================================================================
-  // EFFECT: SINCRONIZAR DADOS INSTANTÂNEOS COM PROPS (CORRIGIDO)
-  // ============================================================================
-useEffect(() => {
-  console.log('🔄 Sidebar - Props atualizadas:', { 
-    user: user?.email, 
-    userLojas: userLojas,
-    isLoading 
-  });
-
-  // ✅ SE LOGOUT: Limpar dados instantâneos
-  if (!user) {
-    console.log('🧹 Sidebar - Limpando dados (logout)');
-    setInstantData({
-      user: null,
-      userLojas: [],
-      userRole: 'visitante'
+  // ===== 2. USEEFFECT: SINCRONIZAR COM PROPS (LOGIN/LOGOUT) =====
+  // Atualiza instantData só quando props mudam de verdade (evita loop).
+  // Deps: user, userLojas, isLoading (estáveis do parent).
+  useEffect(() => {
+    console.log('[Sidebar] 🔄 Props atualizadas:', { 
+      user: user?.email, 
+      lojas: userLojas.length,
+      isLoading 
     });
-    return;
-  }
 
-  // ✅ SE LOGIN: Atualizar dados instantâneos
-  if (user && !isLoading) {
-    console.log('🚀 Sidebar - Atualizando dados instantâneos (login)');
-    
-    let instantRole = 'visitante';
-    if (userLojas.length > 0) {
-      // ✅ CORREÇÃO: Determinar role CORRETAMENTE baseado nas funções
-      const userFunctions = userLojas.map(loja => loja.funcao);
-      console.log('🔍 Funções do usuário nas lojas:', userFunctions);
+    if (!user) {
+      console.log('[Sidebar] 🧹 Limpando dados (logout)');
+      setInstantData({ user: null, userLojas: [], userRole: 'visitante' });
+      return;
+    }
+
+    if (user && !isLoading) {
+      console.log('[Sidebar] 🚀 Atualizando dados instantâneos (login)');
       
-      if (userFunctions.includes('gerente')) {
-        instantRole = 'gerente';
-        console.log('👑 Usuário é GERENTE');
-      } else if (userFunctions.includes('entregador')) {
-        instantRole = 'entregador';
-        console.log('🚚 Usuário é ENTREGADOR');
-      } else if (userFunctions.includes('admin')) {
-        instantRole = 'admin';
-        console.log('⚙️ Usuário é ADMIN');
-      } else {
-        instantRole = 'entregador'; // fallback
-        console.log('🔀 Usuário com função desconhecida, usando fallback');
+      // Detecta role baseado em funções das lojas (lógica role-based).
+      let instantRole = 'visitante';
+      if (userLojas.length > 0) {
+        const userFunctions = userLojas.map(loja => loja.funcao);
+        console.log('[Sidebar] 🔍 Funções nas lojas:', userFunctions);
+        
+        if (userFunctions.includes('gerente')) {
+          instantRole = 'gerente';
+          console.log('[Sidebar] 👑 Role detectada: GERENTE');
+        } else if (userFunctions.includes('entregador')) {
+          instantRole = 'entregador';
+          console.log('[Sidebar] 🚚 Role detectada: ENTREGADOR');
+        } else if (userFunctions.includes('admin')) {
+          instantRole = 'admin';
+          console.log('[Sidebar] ⚙️ Role detectada: ADMIN');
+        } else {
+          instantRole = 'entregador'; // Fallback para entregador.
+          console.log('[Sidebar] 🔀 Função desconhecida, fallback ENTREGADOR');
+        }
+      }
+      
+      // Atualiza só se mudou (evita re-render desnecessário).
+      const newData = { user, userLojas, userRole: instantRole };
+      if (JSON.stringify(newData) !== JSON.stringify(instantData)) {
+        setInstantData(newData);
       }
     }
-    
-    setInstantData({
-      user: user,
-      userLojas: userLojas,
-      userRole: instantRole
-    });
-  }
-}, [user, userLojas, isLoading]);
+  }, [user, userLojas, isLoading]); // Deps mínimas e estáveis.
 
-
-  // ============================================================================
-  // EFFECT: ATUALIZAR COM DADOS COMPLETOS DO HOOK
-  // ============================================================================
+  // ===== 3. USEEFFECT: ATUALIZAR COM HOOK (DADOS COMPLETOS) =====
+  // Integra dados do hook (ex.: role de perfil carregado async).
+  // Deps: hookUser, hookUserRole, loadingUser (do hook, assume estável).
   useEffect(() => {
     if (hookUser && !loadingUser && hookUserRole) {
-      console.log('📦 Sidebar - Dados completos do hook:', hookUserRole);
-      setInstantData(prev => ({
-        ...prev,
-        userRole: hookUserRole // Atualiza role com dados completos
-      }));
+      console.log('[Sidebar] 📦 Hook role detectada:', hookUserRole);
+      // Atualiza role só se diferente (evita loop).
+      if (instantData.userRole !== hookUserRole) {
+        setInstantData(prev => ({ ...prev, userRole: hookUserRole }));
+      }
     }
   }, [hookUser, hookUserRole, loadingUser]);
 
-  // ============================================================================
-  // VARIÁVEIS FINAIS (DADOS INSTANTÂNEOS PRIMEIRO)
-  // ============================================================================
-  const displayUser = instantData.user || hookUser;
-  const displayUserLojas = instantData.userLojas.length > 0 ? instantData.userLojas : hookUserLojas;
-  const displayUserRole = instantData.userRole !== 'visitante' ? instantData.userRole : hookUserRole;
-  const displayLoading = (isLoading && !instantData.user) || loadingUser;
+  // ===== 4. USEMEMO: VARIÁVEIS DE DISPLAY (OTIMIZAÇÃO) =====
+  // Computa vars finais só quando deps mudam (previne re-computes em todo render).
+  const displayValues = useMemo(() => {
+    const displayUser = instantData.user || hookUser;
+    const displayUserLojas = instantData.userLojas.length > 0 ? instantData.userLojas : hookUserLojas;
+    const displayUserRole = instantData.userRole !== 'visitante' ? instantData.userRole : hookUserRole;
+    const displayLoading = (isLoading && !instantData.user) || loadingUser;
 
-  // ✅ CORREÇÃO: CRIAR PERFIL COMPLETO PARA O USERPROFILE
-  const displayUserProfile = userProfile || (displayUser ? {
-    // ✅ FALLBACK: criar perfil básico dos dados instantâneos
-    nome_completo: displayUser.user_metadata?.full_name || displayUser.email,
-    email: displayUser.email,
-    foto: displayUser.user_metadata?.avatar_url,
-    nome_usuario: displayUser.user_metadata?.user_name || displayUser.email.split('@')[0],
-    telefone: displayUser.user_metadata?.phone || '',
-  } : null);
+    const displayUserProfile = userProfile || (displayUser ? {
+      nome_completo: displayUser.user_metadata?.full_name || displayUser.email,
+      email: displayUser.email,
+      foto: displayUser.user_metadata?.avatar_url,
+      nome_usuario: displayUser.user_metadata?.user_name || displayUser.email.split('@')[0],
+      telefone: displayUser.user_metadata?.phone || '',
+    } : null);
 
-  console.log('👤 Sidebar - Estado final:', {
-    displayUser: displayUser?.email,
-    displayUserRole,
-    lojas: displayUserLojas.length,
-    instantUser: !!instantData.user,
-    hookUser: !!hookUser,
-    hasUserProfile: !!userProfile,
-    hasDisplayProfile: !!displayUserProfile
-  });
+    // Log de estado FINAL só em mudanças (debug otimizado, não em todo render).
+    console.log('[Sidebar] 👤 Estado final:', {
+      displayUser: displayUser?.email,
+      displayUserRole,
+      lojas: displayUserLojas.length,
+      instantUser: !!instantData.user,
+      hookUser: !!hookUser,
+      perfil: !!displayUserProfile
+    });
 
-  // ============================================================================
-  // ITENS DO MENU
-  // ============================================================================
+    return { displayUser, displayUserLojas, displayUserRole, displayLoading, displayUserProfile };
+  }, [instantData, hookUser, hookUserRole, hookUserLojas, userProfile, isLoading, loadingUser]);
+
+  const { displayUser, displayUserLojas, displayUserRole, displayLoading, displayUserProfile } = displayValues;
+
+  // ===== 5. ITENS FIXOS DO MENU =====
+  // Define itens básicos do menu (comuns a todos roles).
   const homeItem = { path: '/', icon: '🏠', label: 'EntregasWoo' };
   const vendasWooItem = { path: '/vendaswoo', icon: '🛍️', label: 'VendasWoo' };
   const perfilItem = { path: '/perfil', icon: '👤', label: 'Meu Perfil' };
@@ -143,107 +148,74 @@ useEffect(() => {
   const relatoriosItem = { path: '/relatorios', icon: '📈', label: 'Relatórios' };
   const adminItem = { path: '/admin', icon: '⚙️', label: 'Administração' };
 
-// ============================================================================
-// MONTAGEM CONDICIONAL DOS ITENS - CORRIGIDA PARA LOGOUT INSTANTÂNEO
-// ============================================================================
-const getMenuItems = () => {
-  // ✅ SEMPRE mostrar home e vendaswoo (públicas)
-  const publicItems = [homeItem, vendasWooItem];
-  
-  // ✅ Se NÃO tem usuário, retorna apenas itens públicos
-  if (!displayUser) {
-    console.log('🔐 Sidebar - Menu: APENAS itens públicos (usuário não logado)');
-    return publicItems;
-  }
-  
-  // ✅ Se TEM usuário, montar menu completo baseado na role
-  console.log('🔐 Sidebar - Menu: Itens completos para', displayUserRole);
-  
-  const userItems = [perfilItem];
-
-  if (displayUserRole === 'entregador') {
-    userItems.push(pendentesItem, aceitosItem);
-  }
-
-  if (['entregador', 'gerente', 'admin'].includes(displayUserRole)) {
-    userItems.push(entreguesItem);
-  }
-
-  if (displayUserLojas.length > 0 || displayUserRole === 'admin') {
-    userItems.push(relatoriosItem);
-  }
-
-  if (['gerente', 'admin'].includes(displayUserRole)) {
-    userItems.push(gestaoItem, todosItem);
-  }
-
-  if (displayUserRole === 'admin') {
-    userItems.push(adminItem);
-  }
-
-  return [...publicItems, ...userItems];
-};
-
-const menuItems = getMenuItems();
-
-// ============================================================================
-// FUNÇÃO DE LOGOUT CORRIGIDA - LOGOUT INSTANTÂNEO
-// ============================================================================
-const handleLogout = async () => {
-  try {
-    console.log('🚪 Iniciando logout IMEDIATO...');
-    
-    // ✅ 1. Fechar sidebar no mobile
-    if (window.innerWidth < 1024) {
-      toggleSidebar();
+  // ===== 6. USEMEMO: MONTAGEM DO MENU (BASEADO EM ROLE) =====
+  // Monta menu condicional só quando role/lojas mudam (otimização).
+  const menuItems = useMemo(() => {
+    const publicItems = [homeItem, vendasWooItem];
+    if (!displayUser) {
+      console.log('[Sidebar] 🔐 Menu: apenas itens públicos');
+      return publicItems;
     }
-    
-    // ✅ 2. Limpar estado local IMEDIATAMENTE (CRÍTICO!)
-    setInstantData({
-      user: null,
-      userLojas: [],
-      userRole: 'visitante'
-    });
-    
-    // ✅ 3. Redirecionar IMEDIATAMENTE para home
-    console.log('🎯 Redirecionando para home...');
-    await router.push('/');
-    
-    // ✅ 4. Só então fazer logout (para não bloquear UI)
-    console.log('🔐 Executando signOut...');
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    
-    console.log('✅ Logout realizado com sucesso');
-      
-  } catch (error) {
-    console.error('❌ Erro ao fazer logout:', error);
-    // Mesmo com erro, o usuário já foi redirecionado
-  }
-};
 
-  // ============================================================================
-  // FUNÇÕES AUXILIARES
-  // ============================================================================
-  const handleLoginRedirect = () => {
-    if (window.innerWidth < 1024) {
-      toggleSidebar();
+    console.log('[Sidebar] 🔐 Menu: carregando para role', displayUserRole);
+    const userItems = [perfilItem];
+
+    // Lógica role-based: Adiciona itens por permissão.
+    if (['entregador', 'gerente', 'admin'].includes(displayUserRole)) {
+      userItems.push(pendentesItem);
     }
+    if (displayUserRole === 'entregador') {
+      userItems.push(aceitosItem);
+    }
+    if (['entregador', 'gerente', 'admin'].includes(displayUserRole)) {
+      userItems.push(entreguesItem);
+    }
+    if (displayUserLojas.length > 0 || displayUserRole === 'admin') {
+      userItems.push(relatoriosItem);
+    }
+    if (['gerente', 'admin'].includes(displayUserRole)) {
+      userItems.push(gestaoItem, todosItem);
+    }
+    if (displayUserRole === 'admin') {
+      userItems.push(adminItem);
+    }
+
+    console.log('[Sidebar] 📋 Menu final:', userItems.map(i => i.label));
+    return [...publicItems, ...userItems];
+  }, [displayUser, displayUserRole, displayUserLojas.length]); // Deps: só o essencial.
+
+  // ===== 7. HANDLERS (USECALLBACK PARA ESTABILIDADE) =====
+  // Logout: Limpa state local + Supabase auth + redirect.
+  const handleLogout = useCallback(async () => {
+    try {
+      console.log('[Sidebar] 🚪 Logout iniciado');
+      if (window.innerWidth < 1024) toggleSidebar(); // Fecha mobile.
+      setInstantData({ user: null, userLojas: [], userRole: 'visitante' }); // Limpa instantâneo.
+      await router.push('/'); // Redirect home.
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      console.log('[Sidebar] ✅ Logout concluído');
+    } catch (error) {
+      console.error('[Sidebar] ❌ Erro no logout:', error);
+    }
+  }, [toggleSidebar, router]);
+
+  // Redirect para login.
+  const handleLoginRedirect = useCallback(() => {
+    if (window.innerWidth < 1024) toggleSidebar();
     router.push('/login');
-  };
+  }, [toggleSidebar, router]);
 
-  const handleMenuItemClick = () => {
-    if (window.innerWidth < 1024) {
-      toggleSidebar();
-    }
-  };
+  // Fecha sidebar mobile ao clicar em item.
+  const handleMenuItemClick = useCallback(() => {
+    if (window.innerWidth < 1024) toggleSidebar();
+  }, [toggleSidebar]);
 
-  // ============================================================================
-  // RENDERIZAÇÃO CORRIGIDA
-  // ============================================================================
+  // ===== 8. RENDER (JSX) =====
+  // Renderiza overlay mobile + sidebar com logo, menu e perfil.
   return (
     <>
-      {/* Overlay para mobile */}
+      {/* Overlay para mobile (fecha ao clicar fora). */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
@@ -251,7 +223,7 @@ const handleLogout = async () => {
         />
       )}
       
-      {/* Sidebar principal */}
+      {/* Sidebar principal (fixed em mobile, static em desktop). */}
       <div className={`
         fixed lg:static inset-y-0 left-0 z-50
         w-64 bg-purple-800 text-white
@@ -259,7 +231,7 @@ const handleLogout = async () => {
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         flex flex-col h-full
       `}>
-        {/* Logo / Marca do sistema */}
+        {/* Seção Logo (link para home). */}
         <div className="p-4 border-b border-purple-700">
           <Link href="/" passHref onClick={handleMenuItemClick}>
             <div className="cursor-pointer flex justify-center">
@@ -273,7 +245,7 @@ const handleLogout = async () => {
           </Link>
         </div>
 
-        {/* Menu de navegação - AGORA INSTANTÂNEO */}
+        {/* Seção Menu (itens role-based, com active state). */}
         <nav className="flex-1 p-4 overflow-y-auto">
           {menuItems.map((item) => (
             <Link
@@ -292,14 +264,14 @@ const handleLogout = async () => {
           ))}
         </nav>
 
-        {/* ✅ CORREÇÃO: UserProfile CORRETO - embaixo do menu */}
+        {/* Seção Perfil (UserProfile com loading e ações). */}
         <div className="mt-auto border-t border-purple-700">
           <UserProfile 
-            user={displayUserProfile} // ✅ CORRETO: prop 'user'
+            user={displayUserProfile}
             loading={displayLoading}
-            showLogout={!!displayUser} // ✅ CORRETO: mostrar logout se logado
-            onLogout={handleLogout} // ✅ CORRETO: função logout
-            onLogin={handleLoginRedirect} // ✅ CORRETO: função login
+            showLogout={!!displayUser}
+            onLogout={handleLogout}
+            onLogin={handleLoginRedirect}
           />
         </div>
       </div>
