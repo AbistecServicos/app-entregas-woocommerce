@@ -7,56 +7,63 @@
    ============================================================================== */
 
 /* ------------------------------------------------------------------------------
-   BLOCO 1: CORREÇÕES DE COMPATIBILIDADE
+   BLOCO 1: CORREÇÕES DE COMPATIBILIDADE (VERSÃO CORRIGIDA)
    ------------------------------------------------------------------------------ */
 
 /**
  * 🔧 CORREÇÃO: text-size-adjust cross-browser
- * Remove erro "Erro ao analisar o valor de ‘-webkit-text-size-adjust’"
- * Garante que texto não seja redimensionado em mobile
  */
 html {
-  text-size-adjust: 100%;           /* Padrão W3C */
-  -webkit-text-size-adjust: 100%;   /* Safari/iOS */
-  -ms-text-size-adjust: 100%;       /* Internet Explorer */
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
 }
 
 /**
- * 🔧 CORREÇÃO: font-smoothing cross-browser  
- * Remove erro "Propriedade desconhecida ‘-moz-osx-font-smoothing’"
- * Mantém fontes suaves em todos os navegadores
+ * 🔧 CORREÇÃO: font-smoothing cross-browser
  */
 body {
-  -webkit-font-smoothing: antialiased;  /* Safari/macOS */
-  -moz-osx-font-smoothing: grayscale;   /* Firefox/macOS (sem erro) */
-  font-smoothing: antialiased;          /* Padrão futuro */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-smoothing: antialiased;
 }
 
 /**
- * 🔧 CORREÇÃO: -moz-focus-inner (compatibilidade sem erro)
- * Remove erro "Pseudo-classe ou pseudo-elemento ‘-moz-focus-inner’ desconhecido"
- * Mantém compatibilidade com Firefox antigo sem causar erros
+ * 🔧 CORREÇÃO: Remove aparência nativa APENAS de elementos específicos
+ * NÃO aplica a inputs do tipo checkbox/radio para mantê-los visíveis
+ */
+button, select, textarea {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background: none;
+  border: none;
+  font: inherit;
+}
+
+/**
+ * 🎯 CORREÇÃO CRÍTICA: Preserva checkboxes e radios
+ * NÃO remove background e border de checkboxes
+ */
+input[type="checkbox"],
+input[type="radio"] {
+  /* MANTÉM a aparência nativa dos checkboxes */
+  -webkit-appearance: auto !important;
+  -moz-appearance: auto !important;
+  appearance: auto !important;
+  background: auto !important;
+  border: auto !important;
+}
+
+/**
+ * 🔧 CORREÇÃO: -moz-focus-inner (apenas para botões)
  */
 button::-moz-focus-inner,
-input::-moz-focus-inner,
 select::-moz-focus-inner,
 textarea::-moz-focus-inner {
-  border: 0;      /* Remove borda interna padrão do Firefox */
-  padding: 0;     /* Remove padding interno */
-  margin: 0;      /* Remove margin interna */
-}
-
-/**
- * 🔧 CORREÇÃO: Remove aparência nativa dos elementos
- * Padroniza a aparência entre navegadores
- */
-button, input, select, textarea {
-  -webkit-appearance: none;   /* Safari/Chrome */
-  -moz-appearance: none;      /* Firefox */
-  appearance: none;           /* Padrão W3C */
-  background: none;           /* Remove fundo padrão */
-  border: none;               /* Remove borda padrão */
-  font: inherit;              /* Mantém fonte consistente */
+  border: 0;
+  padding: 0;
+  margin: 0;
 }
 
 /* ------------------------------------------------------------------------------
