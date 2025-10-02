@@ -9,12 +9,12 @@ const RouteGuard = ({ children, requiredRole }) => {
   const [isChecking, setIsChecking] = useState(true);
 
   // ============================================================================
-  // 1. VERIFICAÇÃO OTIMIZADA DE PERMISSÕES
+  // 1. VERIFICAÇÃO OTIMIZADA E SEGURA
   // ============================================================================
   useEffect(() => {
-    // ⚡ NÃO BLOQUEIA SE JÁ ESTIVER CARREGADO
-    if (!loading) {
-      setIsChecking(false);
+    // 🔥 CORREÇÃO: Só processa quando loading termina E userRole está definido
+    if (!loading && userRole !== undefined) {
+      console.log(`🔐 RouteGuard: ${userRole} acessando ${requiredRole}`);
       
       // Hierarquia de permissões
       const rolesHierarchy = {
@@ -27,10 +27,9 @@ const RouteGuard = ({ children, requiredRole }) => {
       const currentRoleLevel = rolesHierarchy[userRole] || 0;
       const requiredRoleLevel = rolesHierarchy[requiredRole] || 0;
 
-      // 🔥 CORREÇÃO CRÍTICA: Só redireciona se usuário NÃO TEM permissão
-      // E se não é um visitante tentando acessar página pública
+      // 🔥 CORREÇÃO: Verificação mais robusta
       if (currentRoleLevel < requiredRoleLevel) {
-        console.log(`🔒 Acesso negado: ${userRole} tentando acessar ${requiredRole}`);
+        console.log(`🔒 Acesso negado: ${userRole} < ${requiredRole}`);
         
         // Redireciona após pequeno delay para evitar flicker
         const timer = setTimeout(() => {
@@ -38,8 +37,17 @@ const RouteGuard = ({ children, requiredRole }) => {
         }, 100);
         
         return () => clearTimeout(timer);
+      } else {
+        // 🔥 NOVO: Só marca como verificado quando tem permissão
+        setIsChecking(false);
       }
     }
+    
+    // 🔥 CORREÇÃO: Se ainda está loading, mantém checking
+    if (loading) {
+      setIsChecking(true);
+    }
+    
   }, [userRole, loading, requiredRole, router]);
 
   // ============================================================================
@@ -57,7 +65,7 @@ const RouteGuard = ({ children, requiredRole }) => {
   }
 
   // ============================================================================
-  // 3. VERIFICAÇÃO FINAL (EVITA FALSOS POSITIVOS)
+  // 3. VERIFICAÇÃO FINAL (APENAS COMO FALLBACK)
   // ============================================================================
   const rolesHierarchy = {
     'visitante': 0,

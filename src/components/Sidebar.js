@@ -148,42 +148,56 @@ const Sidebar = ({
   const relatoriosItem = { path: '/relatorios', icon: '📈', label: 'Relatórios' };
   const adminItem = { path: '/admin', icon: '⚙️', label: 'Administração' };
 
-  // ===== 6. USEMEMO: MONTAGEM DO MENU (BASEADO EM ROLE) =====
-  // Monta menu condicional só quando role/lojas mudam (otimização).
-  const menuItems = useMemo(() => {
-    const publicItems = [homeItem, vendasWooItem];
-    if (!displayUser) {
-      console.log('[Sidebar] 🔐 Menu: apenas itens públicos');
-      return publicItems;
-    }
+// ===== 6. USEMEMO: MONTAGEM DO MENU (BASEADO EM ROLE) =====
+// Monta menu condicional só quando role/lojas mudam (otimização).
+const menuItems = useMemo(() => {
+  // 🔥 CORREÇÃO: Itens públicos (só mostram para visitantes ou usuários sem loja)
+  const publicItems = [
+    { path: '/', icon: '🏠', label: 'EntregasWoo' },
+    { path: '/vendaswoo', icon: '🛍️', label: 'VendasWoo' }
+  ];
 
-    console.log('[Sidebar] 🔐 Menu: carregando para role', displayUserRole);
-    const userItems = [perfilItem];
+  // Se não tem usuário logado, mostra apenas itens públicos
+  if (!displayUser) {
+    console.log('[Sidebar] 🔐 Menu: apenas itens públicos (usuário não logado)');
+    return publicItems;
+  }
 
-    // Lógica role-based: Adiciona itens por permissão.
-    if (['entregador', 'gerente', 'admin'].includes(displayUserRole)) {
-      userItems.push(pendentesItem);
-    }
-    if (displayUserRole === 'entregador') {
-      userItems.push(aceitosItem);
-    }
-    if (['entregador', 'gerente', 'admin'].includes(displayUserRole)) {
-      userItems.push(entreguesItem);
-    }
-    if (displayUserLojas.length > 0 || displayUserRole === 'admin') {
-      userItems.push(relatoriosItem);
-    }
-    if (['gerente', 'admin'].includes(displayUserRole)) {
-      userItems.push(gestaoItem, todosItem);
-    }
-    if (displayUserRole === 'admin') {
-      userItems.push(adminItem);
-    }
+  // 🔥 CORREÇÃO: Se usuário está logado MAS não tem lojas associadas, mostra públicos + perfil
+  if (displayUserLojas.length === 0 && displayUserRole === 'visitante') {
+    console.log('[Sidebar] 🔐 Menu: usuário logado sem lojas - mostra públicos');
+    return [...publicItems, perfilItem];
+  }
 
-    console.log('[Sidebar] 📋 Menu final:', userItems.map(i => i.label));
-    return [...publicItems, ...userItems];
-  }, [displayUser, displayUserRole, displayUserLojas.length]); // Deps: só o essencial.
+  // 🔥 CORREÇÃO: Se usuário tem role de entregador, gerente ou admin, NÃO mostra páginas públicas
+  console.log('[Sidebar] 🔐 Menu: carregando para role', displayUserRole);
+  const userItems = [perfilItem];
 
+  // Lógica role-based: Adiciona itens por permissão.
+  if (['entregador', 'gerente', 'admin'].includes(displayUserRole)) {
+    userItems.push(pendentesItem);
+  }
+  if (displayUserRole === 'entregador') {
+    userItems.push(aceitosItem);
+  }
+  if (['entregador', 'gerente', 'admin'].includes(displayUserRole)) {
+    userItems.push(entreguesItem);
+  }
+  if (displayUserLojas.length > 0 || displayUserRole === 'admin') {
+    userItems.push(relatoriosItem);
+  }
+  if (['gerente', 'admin'].includes(displayUserRole)) {
+    userItems.push(gestaoItem, todosItem);
+  }
+  if (displayUserRole === 'admin') {
+    userItems.push(adminItem);
+  }
+
+  console.log('[Sidebar] 📋 Menu final (SEM páginas públicas):', userItems.map(i => i.label));
+  
+  // 🔥 CORREÇÃO: Retorna apenas userItems (NÃO inclui publicItems)
+  return userItems;
+}, [displayUser, displayUserRole, displayUserLojas.length]); // Deps: só o essencial.
   // ===== 7. HANDLERS (USECALLBACK PARA ESTABILIDADE) =====
   // Logout: Limpa state local + Supabase auth + redirect.
   const handleLogout = useCallback(async () => {
