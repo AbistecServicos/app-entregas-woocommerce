@@ -199,101 +199,127 @@ const cleanupInvalidTokens = useCallback(async () => {
     console.error('❌ Erro na limpeza de tokens:', error);
   }
 }, [userId]); // ✅ ADICIONAR userId COMO DEPENDÊNCIA
-  // ============================================================================
-  // 6. INICIALIZAR NOTIFICAÇÕES (ORIGINAL, SEM LOOP)
-  // ============================================================================
-  // Roda só em mudanças reais; ref previne re-init.
-  useEffect(() => {
-    if (!isSupported || !userId || hasInitializedRef.current || isInitializing) return;
+// ============================================================================
+// 6. INICIALIZAR NOTIFICAÇÕES (VERSÃO SUPER SEGURA)
+// ============================================================================
+useEffect(() => {
+  // ✅ VERIFICAÇÃO MUITO RIGOROSA
+  if (typeof window === 'undefined') return; // Não roda no SSR
+  if (!isSupported) return; // Sem suporte
+  if (!userId || userId === 'undefined' || userId === 'null') return; // userId inválido
+  if (hasInitializedRef.current || isInitializing) return; // Já inicializou
 
-    const initializeNotifications = async () => {
-      hasInitializedRef.current = true; // Flag para uma vez só.
+  const initializeNotifications = async () => {
+    // ✅ VERIFICAÇÃO DE AUTENTICAÇÃO SÍNCRONA PRIMEIRO
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session || session.user.id !== userId) {
+        if (isDev) console.log('🔐 Usuário não autenticado ou ID não coincide');
+        return;
+      }
+
+      hasInitializedRef.current = true;
       setIsInitializing(true);
 
-      try {
+      // ✅ LIMPEZA SÓ SE NECESSÁRIA (OPCIONAL)
+      if (process.env.NODE_ENV === 'development') {
         await cleanupInvalidTokens();
-        await registerServiceWorker();
-        await navigator.serviceWorker.ready;
+      }
 
-        let currentPermission = Notification.permission;
-        if (currentPermission === 'default') {
-          currentPermission = await Notification.requestPermission();
-        }
-        
-        setPermission(currentPermission);
-        
-        if (currentPermission !== 'granted') {
-          setIsInitializing(false);
-          return;
-        }
+      await registerServiceWorker();
+      await navigator.serviceWorker.ready;
 
-        const fcmToken = await getFCMToken();
-        
-        if (fcmToken) {
-          setToken(fcmToken);
-          await saveTokenToSupabase(userId, fcmToken);
-          if (isDev) console.log('🎯 Notificações configuradas'); // Linha 158 original.
-        }
-
-      } catch (error) {
-        console.error('❌ Erro nas notificações:', error);
-      } finally {
+      let currentPermission = Notification.permission;
+      if (currentPermission === 'default') {
+        currentPermission = await Notification.requestPermission();
+      }
+      
+      setPermission(currentPermission);
+      
+      if (currentPermission !== 'granted') {
         setIsInitializing(false);
+        return;
       }
-    };
 
+      const fcmToken = await getFCMToken();
+      
+      if (fcmToken) {
+        setToken(fcmToken);
+        await saveTokenToSupabase(userId, fcmToken);
+        if (isDev) console.log('🎯 Notificações configuradas');
+      }
+
+    } catch (error) {
+      console.error('❌ Erro nas notificações:', error);
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
+  // ✅ TIMEOUT PARA GARANTIR QUE A PÁGINA CARREGOU
+  const timer = setTimeout(() => {
     initializeNotifications();
-  }, [userId, isSupported]); // Deps: só userId + supported (sem isInitializing!).
+  }, 1000);
 
-  // ============================================================================
-  // 7. LISTENER DE MENSAGENS EM FOREGROUND (ORIGINAL + CLEANUP)
-  // ============================================================================
-  useEffect(() => {
-    if (!isSupported || !userId || !app) return;
+  return () => clearTimeout(timer);
+}, [userId, isSupported]);
+// ============================================================================
+// 7. LISTENER DE MENSAGENS EM FOREGROUND (CORRIGIDO - SÓ COM USER AUTENTICADO)
+// ============================================================================
+useEffect(() => {
+  // ✅ VERIFICAÇÃO: Só configura listener se usuário estiver autenticado
+  if (!isSupported || !userId || !app) return;
 
-    const setupMessageListener = () => {
-      try {
-        const messaging = getMessaging(app);
-        
-        const unsubscribe = onMessage(messaging, (payload) => {
-          if (isDev) console.log('📩 Nova notificação:', payload.notification?.title);
-          setNotification(payload);
+  const setupMessageListener = async () => {
+    try {
+      // ✅ CONFIRMAR AUTENTICAÇÃO ANTES DE CONFIGURAR LISTENER
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        if (isDev) console.log('🔐 Usuário não autenticado - pulando listener');
+        return;
+      }
 
-          // Mostrar notificação em foreground (original).
-          if (payload.notification && Notification.permission === 'granted') {
-            const { title, body } = payload.notification;
-            
-            try {
-              new Notification(title, {
-                body,
-                icon: '/icon-192x192.png',
-                badge: '/icon-192x192.png',
-                data: payload.data || {},
-                tag: `fg-${Date.now()}`,
-                requireInteraction: true
-              });
-            } catch (error) {
-              console.error('❌ Erro na notificação:', error);
-            }
+      const messaging = getMessaging(app);
+      
+      const unsubscribe = onMessage(messaging, (payload) => {
+        if (isDev) console.log('📩 Nova notificação:', payload.notification?.title);
+        setNotification(payload);
+
+        // Mostrar notificação em foreground (original).
+        if (payload.notification && Notification.permission === 'granted') {
+          const { title, body } = payload.notification;
+          
+          try {
+            new Notification(title, {
+              body,
+              icon: '/icon-192x192.png',
+              badge: '/icon-192x192.png',
+              data: payload.data || {},
+              tag: `fg-${Date.now()}`,
+              requireInteraction: true
+            });
+          } catch (error) {
+            console.error('❌ Erro na notificação:', error);
           }
-        });
+        }
+      });
 
-        unsubscribeRef.current = unsubscribe; // Salva para cleanup.
-        return unsubscribe;
-      } catch (error) {
-        console.error('❌ Erro no listener:', error);
-      }
-    };
+      unsubscribeRef.current = unsubscribe; // Salva para cleanup.
+      return unsubscribe;
+    } catch (error) {
+      console.error('❌ Erro no listener:', error);
+    }
+  };
 
-    const unsubscribe = setupMessageListener();
-    return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
-        if (isDev) console.log('🧹 Cleanup onMessage listener');
-      }
-    };
-  }, [userId, isSupported, app]); // Deps originais, mas com ref cleanup.
+  const unsubscribe = setupMessageListener();
+  return () => {
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
+      if (isDev) console.log('🧹 Cleanup onMessage listener');
+    }
+  };
+}, [userId, isSupported, app]);
 
   // ============================================================================
   // 8. DEBUG: LOG APENAS QUANDO NOTIFICAÇÃO CHEGAR (ORIGINAL)
