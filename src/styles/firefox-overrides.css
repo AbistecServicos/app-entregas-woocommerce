@@ -1,0 +1,14 @@
+/* Remove warnings específicos do Firefox */
+* {
+  /* Remove propriedades problemáticas */
+  -webkit-text-size-adjust: unset;
+  -moz-text-size-adjust: unset;
+  text-size-adjust: unset;
+  -moz-osx-font-smoothing: unset;
+  font-smoothing: unset;
+}
+
+/* Remove pseudo-classes não suportadas */
+*::-moz-focus-inner {
+  border: 0;
+}
