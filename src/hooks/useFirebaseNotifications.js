@@ -297,11 +297,43 @@ export const useFirebaseNotifications = (userId) => {
     };
   }, [token]);
 
-  return { 
-    token, 
-    notification, 
-    isSupported,
-    permission,
-    isInitializing
-  };
+// ============================================================================
+// 10. FUNÇÃO PARA FORÇAR ATUALIZAÇÃO DO TOKEN (NOVA - PARA O SININHO)
+// ============================================================================
+const forceRefreshToken = useCallback(async () => {
+  if (!isSupported || !userId) return null;
+  
+  try {
+    console.log('🔄 Forçando atualização do token FCM...');
+    
+    // ✅ OBTER NOVO TOKEN
+    const fcmToken = await getFCMToken();
+    
+    if (fcmToken && fcmToken !== token) {
+      setToken(fcmToken);
+      await saveTokenToSupabase(userId, fcmToken);
+      console.log('✅ Token FCM atualizado forçadamente');
+      return fcmToken;
+    } else {
+      console.log('🔁 Token FCM já está atualizado');
+      return token;
+    }
+  } catch (error) {
+    console.error('❌ Erro ao forçar atualização do token:', error);
+    return null;
+  }
+}, [userId, isSupported, getFCMToken, saveTokenToSupabase, token]);
+
+// ============================================================================
+// 11. RETORNO DO HOOK (ATUALIZADO)
+// ============================================================================
+return { 
+  token, 
+  notification, 
+  isSupported,
+  permission,
+  isInitializing,
+  forceRefreshToken // ✅ ADICIONAR ESTA FUNÇÃO
 };
+};
+

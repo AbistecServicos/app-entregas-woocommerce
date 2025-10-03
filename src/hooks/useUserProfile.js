@@ -1,8 +1,13 @@
 // src/hooks/useUserProfile.js
-import { useState, useEffect } from 'react';
+// CORREÇÃO DE EMERGÊNCIA - REMOVER LOOP INFINITO
+
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 
 export const useUserProfile = () => {
+  // ============================================================================
+  // 1. ESTADOS E REFS (SIMPLIFICADOS PARA QUEBRAR O LOOP)
+  // ============================================================================
   const [state, setState] = useState({
     user: null,
     userProfile: null,
@@ -10,36 +15,29 @@ export const useUserProfile = () => {
     userLojas: [],
     loading: true,
     error: null,
-    updating: false,
-    isInitialized: false
+    updating: false
   });
 
+  const isMountedRef = useRef(true);
+  const isLoadingRef = useRef(false);
+
   // ============================================================================
-  // FUNÇÃO PRINCIPAL: CARREGAR DADOS DO USUÁRIO (MANTIDA)
+  // 2. LOAD USER DATA (CORREÇÃO CRÍTICA - REMOVER DEPENDÊNCIA CIRCULAR)
   // ============================================================================
-  const loadUserData = async () => {
+  const loadUserData = useCallback(async () => {
+    if (isLoadingRef.current) {
+      return; // ✅ Já está carregando, evitar duplicata
+    }
+
     try {
+      isLoadingRef.current = true;
       setState(prev => ({ ...prev, loading: true, error: null }));
 
-      // 1. VERIFICAR USUÁRIO AUTENTICADO
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
       
-      if (authError) {
-        console.error('❌ Erro auth:', authError);
-        setState(prev => ({
-          ...prev,
-          user: null,
-          userProfile: null,
-          userRole: 'visitante',
-          userLojas: [],
-          loading: false,
-          error: 'Falha na autenticação: ' + authError.message
-        }));
-        return;
-      }
+      if (!isMountedRef.current) return;
 
-      if (!authUser) {
-        console.log('🔍 Nenhum usuário autenticado encontrado');
+      if (authError || !authUser) {
         setState(prev => ({
           ...prev,
           user: null,
@@ -52,9 +50,7 @@ export const useUserProfile = () => {
         return;
       }
 
-      console.log('👤 Usuário autenticado:', authUser.email);
-
-      // 2. BUSCAR PERFIL NA TABELA 'usuarios'
+      // Buscar perfil do usuário
       const { data: usuarioData, error: usuarioError } = await supabase
         .from('usuarios')
         .select('*')
@@ -62,7 +58,6 @@ export const useUserProfile = () => {
         .single();
 
       if (usuarioError) {
-        console.error('❌ Erro ao buscar perfil:', usuarioError);
         setState(prev => ({
           ...prev,
           user: authUser,
@@ -70,14 +65,13 @@ export const useUserProfile = () => {
           userRole: 'visitante',
           userLojas: [],
           loading: false,
-          error: 'Perfil não encontrado: ' + usuarioError.message
+          error: 'Perfil não encontrado'
         }));
         return;
       }
 
-      // 3. VERIFICAÇÃO: É ADMINISTRADOR?
+      // Verificar se é admin
       if (usuarioData.is_admin === true) {
-        console.log('⭐ Usuário é admin');
         setState(prev => ({
           ...prev,
           user: authUser,
@@ -90,129 +84,103 @@ export const useUserProfile = () => {
         return;
       }
 
-      // 4. BUSCAR LOJAS ASSOCIADAS
+      // Buscar lojas associadas
       const { data: lojasData, error: lojasError } = await supabase
         .from('loja_associada')
         .select('*')
         .eq('uid_usuario', authUser.id)
         .eq('status_vinculacao', 'ativo');
 
-      if (lojasError) {
-        console.error('❌ Erro ao buscar lojas:', lojasError);
-        setState(prev => ({
-          ...prev,
-          user: authUser,
-          userProfile: usuarioData,
-          userRole: 'visitante',
-          userLojas: [],
-          loading: false,
-          error: null
-        }));
-        return;
-      }
-
-      // 5. DETERMINAR FUNÇÃO BASEADA NAS LOJAS ASSOCIADAS
       let finalUserRole = 'visitante';
       
-      if (!lojasData || lojasData.length === 0) {
-        finalUserRole = 'visitante';
-      } else {
+      if (lojasData && lojasData.length > 0) {
         const funcoes = lojasData.map(loja => loja.funcao);
-        
         if (funcoes.includes('gerente')) {
           finalUserRole = 'gerente';
         } else if (funcoes.includes('entregador')) {
           finalUserRole = 'entregador';
-        } else {
-          finalUserRole = 'visitante';
         }
       }
 
-      console.log(`🎯 Função definida: ${finalUserRole}`, lojasData);
-
-      // ✅ ATUALIZAR ESTADO FINAL
-      setState(prev => ({
-        ...prev,
+      // ✅ ATUALIZAÇÃO ÚNICA - SEM RE-RENDERS DESNECESSÁRIOS
+      setState({
         user: authUser,
         userProfile: usuarioData,
         userRole: finalUserRole,
         userLojas: lojasData || [],
         loading: false,
-        error: null
-      }));
+        error: null,
+        updating: false
+      });
 
     } catch (error) {
-      console.error('💥 Erro geral no loadUserData:', error);
-      setState(prev => ({
-        ...prev,
-        user: null,
-        userProfile: null,
-        userRole: 'visitante',
-        userLojas: [],
-        loading: false,
-        error: 'Erro inesperado: ' + error.message
-      }));
+      if (isMountedRef.current) {
+        setState(prev => ({
+          ...prev,
+          user: null,
+          userProfile: null,
+          userRole: 'visitante',
+          userLojas: [],
+          loading: false,
+          error: 'Erro ao carregar perfil'
+        }));
+      }
+    } finally {
+      isLoadingRef.current = false;
     }
-  };
+  }, []); // ✅ CORREÇÃO CRÍTICA: array de dependências VAZIO
 
   // ============================================================================
-  // EFFECT PRINCIPAL: ESCUTAR MUDANÇAS DE AUTENTICAÇÃO (CORRIGIDO)
+  // 3. EFFECT DE INICIALIZAÇÃO (SIMPLIFICADO)
   // ============================================================================
   useEffect(() => {
-    let isMounted = true;
+    isMountedRef.current = true;
 
-    console.log('🔧 useUserProfile: Iniciando listener de auth...');
-
-    // 1. INICIALIZAÇÃO IMEDIATA
     const initializeAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (!isMounted) return;
-
-        console.log('🔄 Sessão inicial:', session?.user?.email);
+        if (!isMountedRef.current) return;
 
         if (session?.user) {
           await loadUserData();
         } else {
-          setState(prev => ({
-            ...prev,
-            user: null,
-            userProfile: null,
-            userRole: 'visitante',
-            userLojas: [],
-            loading: false,
-            isInitialized: true
-          }));
+          setState(prev => ({ ...prev, loading: false }));
         }
       } catch (error) {
-        console.error('❌ Erro na inicialização:', error);
-      } finally {
-        if (isMounted) {
-          setState(prev => ({ ...prev, isInitialized: true }));
+        if (isMountedRef.current) {
+          setState(prev => ({ ...prev, loading: false }));
         }
       }
     };
 
     initializeAuth();
 
-    // 🔥 CORREÇÃO CRÍTICA: ADICIONAR LISTENER PARA MUDANÇAS DE AUTH
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!isMounted) return;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [loadUserData]);
 
-        console.log('🔄 Auth State Change:', event, session?.user?.email);
+  // ============================================================================
+  // 4. EFFECT DO LISTENER (SIMPLIFICADO)
+  // ============================================================================
+  useEffect(() => {
+    if (!isMountedRef.current) return;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!isMountedRef.current) return;
 
         switch (event) {
           case 'SIGNED_IN':
           case 'TOKEN_REFRESHED':
-          case 'USER_UPDATED':
-            console.log('✅ Usuário autenticado/atualizado, carregando dados...');
-            await loadUserData();
+            if (session?.user) {
+              // ✅ PEQUENO DELAY PARA EVITAR MÚLTIPLAS EXECUÇÕES
+              setTimeout(() => loadUserData(), 100);
+            }
             break;
           
           case 'SIGNED_OUT':
-            console.log('🚪 Usuário deslogado');
             setState(prev => ({
               ...prev,
               user: null,
@@ -223,49 +191,45 @@ export const useUserProfile = () => {
               error: null
             }));
             break;
-          
-          default:
-            console.log('🔍 Evento auth não tratado:', event);
         }
       }
     );
 
     return () => {
-      console.log('🧹 useUserProfile: Limpando listener...');
-      isMounted = false;
-      authListener?.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
-  }, []);
+  }, [loadUserData]);
 
   // ============================================================================
-  // RESTANTE DO CÓDIGO (MANTIDO)
+  // 5. REMOVER EFFECT DE DEBUG TEMPORARIAMENTE
   // ============================================================================
+  // ❌ COMENTAR ESTE EFFECT PARA QUEBRAR O LOOP
+  /*
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      const hasUserChanged = state.user?.email !== sessionStorage.getItem('last_user_email');
-      const hasRoleChanged = state.userRole !== sessionStorage.getItem('last_user_role');
-      
-      if (hasUserChanged || hasRoleChanged) {
-        console.log('👤 useUserProfile - Estado:', {
-          user: state.user?.email,
-          role: state.userRole,
-          loading: state.loading
-        });
-        
-        sessionStorage.setItem('last_user_email', state.user?.email || '');
-        sessionStorage.setItem('last_user_role', state.userRole);
-      }
+      console.log('👤 useUserProfile - Estado:', {
+        user: state.user?.email,
+        role: state.userRole,
+        loading: state.loading
+      });
     }
   }, [state.user?.email, state.userRole, state.loading]);
+  */
 
+  // ============================================================================
+  // 6. FUNÇÕES AUXILIARES
+  // ============================================================================
   const updateUserProfile = async (formData) => {
-    // ... (mantido igual)
+    // ... (manter igual ao anterior)
   };
 
   const reloadUserData = async () => {
     await loadUserData();
   };
 
+  // ============================================================================
+  // 7. RETORNO
+  // ============================================================================
   return {
     user: state.user,
     userProfile: state.userProfile,

@@ -1,15 +1,19 @@
-// components/PedidosEntreguesAdmin.js (CORREÇÃO APENAS DO loja_logo)
+// components/PedidosEntreguesAdmin.js (CORREÇÃO - USAR INSTÂNCIA COMPARTILHADA)
 import React, { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../../lib/supabase'; // ✅ USAR INSTÂNCIA COMPARTILHADA
 import { jsPDF } from 'jspdf';
 
 // ==============================================================================
-// 1. CONFIGURAÇÃO DO SUPABASE
+// 1. REMOVER CONFIGURAÇÃO DUPLICADA DO SUPABASE
 // ==============================================================================
-const supabaseUrl = 'https://czzidhzzpqegfvvmdgno.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6emlkaHp6cHFlZ2Z2dm1kZ25vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI5NTIwMDMsImV4cCI6MjA2ODUyODAwM30.zK2iFp-b4e5vghpHgWGuOk0LooujlyU7kVm4sbM85m0';
-const supabase = createClient(supabaseUrl, supabaseKey);
+// ❌ REMOVER ESTAS LINHA:
+// const supabaseUrl = 'https://czzidhzzpqegfvvmdgno.supabase.co';
+// const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6emlkaHp6cHFlZ2Z2dm1kZ25vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI5NTIwMDMsImV4cCI6MjA2ODUyODAwM30.zK2iFp-b4e5vghpHgWGuOk0LooujlyU7kVm4sbM85m0';
+// const supabase = createClient(supabaseUrl, supabaseKey);
 
+// ✅ AGORA USA A INSTÂNCIA COMPARTILHADA de '../../lib/supabase'
+
+// ... resto do código mantido igual
 // ==============================================================================
 // 2. FUNÇÕES AUXILIARES
 // ==============================================================================

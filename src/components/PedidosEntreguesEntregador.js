@@ -1,23 +1,14 @@
 // components/PedidosEntreguesEntregador.js
-// ============================================================================
-// IMPORTAÇÕES
-// ============================================================================
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { OrderModal, WithCourier } from './OrderModal';
 
 // ============================================================================
-// COMPONENTE: PEDIDOS ENTREGUES - ENTREGADOR
+// COMPONENTE OTIMIZADO: PEDIDOS ENTREGUES - ENTREGADOR
 // ============================================================================
-/**
- * Versão exclusiva para ENTREGADORES:
- * - Só pode visualizar seus próprios pedidos entregues.
- * - Pode filtrar por loja e status de pagamento.
- * - Não pode editar valores, nem atualizar, nem gerar recibos.
- */
 export default function PedidosEntreguesEntregador({ userProfile }) {
   // ==========================================================================
-  // 1. ESTADOS DO COMPONENTE
+  // 1. ESTADOS DO COMPONENTE (MANTIDOS)
   // ==========================================================================
   const [pedidos, setPedidos] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -26,57 +17,84 @@ export default function PedidosEntreguesEntregador({ userProfile }) {
   const [pedidoSelecionado, setPedidoSelecionado] = useState(null);
   const [modalAberto, setModalAberto] = useState(false);
   const [lojas, setLojas] = useState([]);
-  const [error, setError] = useState(null); // Estado para erros
+  const [error, setError] = useState(null);
 
   // ==========================================================================
-  // 2. CARREGAR LOJAS ASSOCIADAS AO ENTREGADOR
+  // 2. REFS PARA CONTROLE DE PERFORMANCE (NOVO)
   // ==========================================================================
-  useEffect(() => {
-    const carregarLojas = async () => {
-      if (!userProfile?.uid) {
-        setError('Usuário não autenticado.');
-        return;
-      }
-
-      try {
-        console.log('🔍 Carregando lojas para UID:', userProfile.uid); // Log para depuração
-        const { data, error } = await supabase
-          .from('loja_associada')
-          .select('id_loja, loja_nome')
-          .eq('uid_usuario', userProfile.uid); // ✅ Corrigido: 'uid_usuario'
-
-        if (error) throw error;
-        console.log('✅ Lojas carregadas:', data); // Log para depuração
-        
-        // Processar para uniques por id_loja
-        const uniqueLojas = [...new Map(data.map(item => [item.id_loja, item])).values()];
-        setLojas(uniqueLojas);
-      } catch (err) {
-        console.error('Erro ao carregar lojas do entregador:', err.message);
-        setError('Falha ao carregar lojas associadas. Verifique o schema da tabela loja_associada.');
-      }
-    };
-
-    carregarLojas();
-  }, [userProfile]);
+  const isMountedRef = useRef(true);
+  const lastUserUidRef = useRef(null);
+  const lastFiltrosRef = useRef({ loja: '', status: '' });
 
   // ==========================================================================
-  // 3. CARREGAR PEDIDOS DO ENTREGADOR LOGADO
+  // 3. CARREGAR LOJAS ASSOCIADAS (OTIMIZADO)
   // ==========================================================================
-  const carregarPedidos = async () => {
-    setIsLoading(true);
+  const carregarLojas = useCallback(async () => {
+    if (!userProfile?.uid) {
+      setError('Usuário não autenticado.');
+      return;
+    }
+
+    // ✅ OTIMIZAÇÃO: Evitar carregar lojas se usuário não mudou
+    if (userProfile.uid === lastUserUidRef.current && lojas.length > 0) {
+      return;
+    }
+
     try {
-      if (!userProfile?.uid) {
-        setError('Usuário não autenticado.');
-        return;
-      }
+      console.log('🔍 Carregando lojas para UID:', userProfile.uid);
+      
+      const { data, error } = await supabase
+        .from('loja_associada')
+        .select('id_loja, loja_nome')
+        .eq('uid_usuario', userProfile.uid);
 
-      console.log('🔍 Carregando pedidos para UID:', userProfile.uid); // Log para depuração
+      if (error) throw error;
+      
+      // ✅ OTIMIZAÇÃO: Processar uniquess mais eficientemente
+      const uniqueLojas = data ? [...new Map(data.map(item => [item.id_loja, item])).values()] : [];
+      
+      if (isMountedRef.current) {
+        setLojas(uniqueLojas);
+        lastUserUidRef.current = userProfile.uid; // ✅ Guardar referência
+      }
+      
+      console.log('✅ Lojas carregadas:', uniqueLojas.length);
+    } catch (err) {
+      console.error('Erro ao carregar lojas do entregador:', err.message);
+      if (isMountedRef.current) {
+        setError('Falha ao carregar lojas associadas.');
+      }
+    }
+  }, [userProfile, lojas.length]);
+
+  // ==========================================================================
+  // 4. CARREGAR PEDIDOS (OTIMIZADO COM useCallback)
+  // ==========================================================================
+  const carregarPedidos = useCallback(async () => {
+    // ✅ OTIMIZAÇÃO: Prevenir chamadas desnecessárias
+    if (!userProfile?.uid) {
+      setError('Usuário não autenticado.');
+      return;
+    }
+
+    // ✅ OTIMIZAÇÃO: Verificar se filtros realmente mudaram
+    const filtrosAtuais = { loja: filtroLoja, status: filtroStatus };
+    const filtrosMudaram = JSON.stringify(filtrosAtuais) !== JSON.stringify(lastFiltrosRef.current);
+    
+    if (!filtrosMudaram && pedidos.length > 0 && !isLoading) {
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      console.log('🔍 Carregando pedidos para UID:', userProfile.uid);
+      
       let query = supabase
         .from('pedidos')
         .select('*')
         .eq('status_transporte', 'entregue')
-        .eq('aceito_por_uid', userProfile.uid); // ✅ Corrigido: 'aceito_por_uid'
+        .eq('aceito_por_uid', userProfile.uid);
 
       if (filtroLoja) {
         query = query.eq('id_loja', filtroLoja);
@@ -88,36 +106,85 @@ export default function PedidosEntreguesEntregador({ userProfile }) {
       const { data, error } = await query;
       if (error) throw error;
 
-      console.log('✅ Pedidos carregados:', data); // Log para depuração
-      setPedidos(data || []);
-      setError(null);
+      if (isMountedRef.current) {
+        setPedidos(data || []);
+        setError(null);
+        lastFiltrosRef.current = filtrosAtuais; // ✅ Guardar estado dos filtros
+      }
+      
+      console.log('✅ Pedidos carregados:', data?.length || 0);
     } catch (err) {
       console.error('Erro ao carregar pedidos do entregador:', err.message);
-      setError('Falha ao carregar pedidos. Verifique o schema da tabela pedidos.');
+      if (isMountedRef.current) {
+        setError('Falha ao carregar pedidos.');
+      }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
-  };
+  }, [userProfile, filtroLoja, filtroStatus, pedidos.length, isLoading]);
 
   // ==========================================================================
-  // 4. ABRIR MODAL DE DETALHES
+  // 5. ABRIR MODAL (OTIMIZADO COM useCallback)
   // ==========================================================================
-  const abrirModalDetalhes = (pedido) => {
-    if (pedido) {
+  const abrirModalDetalhes = useCallback((pedido) => {
+    if (pedido && isMountedRef.current) {
       setPedidoSelecionado(pedido);
       setModalAberto(true);
     }
-  };
+  }, []);
 
   // ==========================================================================
-  // 5. USEEFFECT PARA CARREGAR PEDIDOS
+  // 6. FECHAR MODAL (OTIMIZADO)
+  // ==========================================================================
+  const fecharModal = useCallback(() => {
+    if (isMountedRef.current) {
+      setModalAberto(false);
+      setPedidoSelecionado(null);
+    }
+  }, []);
+
+  // ==========================================================================
+  // 7. EFFECTS OTIMIZADOS
   // ==========================================================================
   useEffect(() => {
-    if (userProfile?.uid) carregarPedidos();
-  }, [userProfile, filtroLoja, filtroStatus]);
+    isMountedRef.current = true;
+    
+    // ✅ CARREGAR LOJAS APENAS UMA VEZ
+    if (userProfile?.uid) {
+      carregarLojas();
+    }
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [userProfile, carregarLojas]);
+
+  useEffect(() => {
+    // ✅ CARREGAR PEDIDOS QUANDO FILTROS MUDAREM
+    if (userProfile?.uid && isMountedRef.current) {
+      carregarPedidos();
+    }
+  }, [userProfile, filtroLoja, filtroStatus, carregarPedidos]);
 
   // ==========================================================================
-  // 6. RENDERIZAÇÃO
+  // 8. HANDLERS DE FILTRO (OTIMIZADOS)
+  // ==========================================================================
+  const handleFiltroLoja = useCallback((e) => {
+    if (isMountedRef.current) {
+      setFiltroLoja(e.target.value);
+    }
+  }, []);
+
+  const handleFiltroStatus = useCallback((e) => {
+    if (isMountedRef.current) {
+      setFiltroStatus(e.target.value);
+    }
+  }, []);
+
+  // ==========================================================================
+  // 9. RENDERIZAÇÃO OTIMIZADA
   // ==========================================================================
   return (
     <div className="bg-gray-50 min-h-screen p-4">
@@ -127,7 +194,7 @@ export default function PedidosEntreguesEntregador({ userProfile }) {
           <div>
             <h1 className="text-xl font-bold text-purple-800">Meus Pedidos Entregues</h1>
             <p className="text-sm text-gray-600">
-              Entregador: {userProfile.nome_completo || 'Não informado'}
+              Entregador: {userProfile?.nome_completo || 'Não informado'}
             </p>
           </div>
         </div>
@@ -136,20 +203,20 @@ export default function PedidosEntreguesEntregador({ userProfile }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
           <select
             value={filtroLoja}
-            onChange={(e) => setFiltroLoja(e.target.value)}
+            onChange={handleFiltroLoja}
             className="w-full p-2 border border-gray-300 rounded"
           >
             <option value="">Todas Lojas</option>
             {lojas.map((loja) => (
               <option key={loja.id_loja} value={loja.id_loja}>
-                {loja.loja_nome || `Loja ${loja.id_loja}`} {/* Fallback e desambiguação */}
+                {loja.loja_nome || `Loja ${loja.id_loja}`}
               </option>
             ))}
           </select>
 
           <select
             value={filtroStatus}
-            onChange={(e) => setFiltroStatus(e.target.value)}
+            onChange={handleFiltroStatus}
             className="w-full p-2 border border-gray-300 rounded"
           >
             <option value="">Todos Status</option>
@@ -157,12 +224,20 @@ export default function PedidosEntreguesEntregador({ userProfile }) {
             <option value="false">Pendente</option>
           </select>
         </div>
-        {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+        
+        {error && (
+          <p className="text-red-600 text-sm mt-2">{error}</p>
+        )}
+        
+        {/* ✅ FEEDBACK DE CARREGAMENTO OTIMIZADO */}
+        {isLoading && (
+          <p className="text-purple-600 text-sm mt-2">Carregando pedidos...</p>
+        )}
       </div>
 
       {/* Lista de pedidos (apenas visualização) */}
       <div className="container mx-auto px-2">
-        {isLoading ? (
+        {isLoading && pedidos.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-purple-600">Carregando seus pedidos...</p>
           </div>
@@ -173,38 +248,11 @@ export default function PedidosEntreguesEntregador({ userProfile }) {
         ) : (
           <div className="grid grid-cols-1 gap-3">
             {pedidos.map((pedido) => (
-              <div key={pedido.id} className="bg-white rounded-lg shadow p-3">
-                <button
-                  onClick={() => abrirModalDetalhes(pedido)}
-                  className="text-base font-bold text-purple-800 hover:text-purple-600 hover:underline w-full text-left"
-                >
-                  Pedido #{pedido.id_loja_woo}
-                </button>
-                <p className="text-sm font-semibold text-blue-800">{pedido.loja_nome}</p>
-                <div className="mt-2 text-sm">
-<p>
-  <strong>Data Entrega:</strong>{' '}
-  {pedido.ultimo_status ? new Date(pedido.ultimo_status).toLocaleDateString('pt-BR') : '-'}
-</p>
-  <p>
-    <strong>Status Pagamento:</strong>{' '}
-    {pedido.status_pagamento ? '✅ Pago' : '❌ Pendente'}
-  </p>
-  
-  {/* FRETE OFERECIDO - ADICIONADO */}
-  {pedido.frete_oferecido && (
-    <p>
-      <strong>Frete Oferecido:</strong> R${' '}
-      {parseFloat(pedido.frete_oferecido).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-    </p>
-  )}
-  
-  <p>
-    <strong>Frete Pago:</strong> R${' '}
-    {parseFloat(pedido.frete_pago || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-  </p>
-</div>
-              </div>
+              <PedidoCard 
+                key={pedido.id} 
+                pedido={pedido} 
+                onAbrirDetalhes={abrirModalDetalhes} 
+              />
             ))}
           </div>
         )}
@@ -214,13 +262,54 @@ export default function PedidosEntreguesEntregador({ userProfile }) {
       <OrderModal
         pedido={pedidoSelecionado}
         isOpen={modalAberto}
-        onClose={() => setModalAberto(false)}
+        onClose={fecharModal}
       >
         <WithCourier
           pedido={pedidoSelecionado}
-          onClose={() => setModalAberto(false)}
+          onClose={fecharModal}
         />
       </OrderModal>
     </div>
   );
 }
+
+// ============================================================================
+// 10. COMPONENTE SEPARADO PARA PEDIDO CARD (OTIMIZAÇÃO EXTRA)
+// ============================================================================
+const PedidoCard = React.memo(({ pedido, onAbrirDetalhes }) => {
+  return (
+    <div className="bg-white rounded-lg shadow p-3">
+      <button
+        onClick={() => onAbrirDetalhes(pedido)}
+        className="text-base font-bold text-purple-800 hover:text-purple-600 hover:underline w-full text-left"
+      >
+        Pedido #{pedido.id_loja_woo}
+      </button>
+      <p className="text-sm font-semibold text-blue-800">{pedido.loja_nome}</p>
+      <div className="mt-2 text-sm">
+        <p>
+          <strong>Data Entrega:</strong>{' '}
+          {pedido.ultimo_status ? new Date(pedido.ultimo_status).toLocaleDateString('pt-BR') : '-'}
+        </p>
+        <p>
+          <strong>Status Pagamento:</strong>{' '}
+          {pedido.status_pagamento ? '✅ Pago' : '❌ Pendente'}
+        </p>
+        
+        {pedido.frete_oferecido && (
+          <p>
+            <strong>Frete Oferecido:</strong> R${' '}
+            {parseFloat(pedido.frete_oferecido).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </p>
+        )}
+        
+        <p>
+          <strong>Frete Pago:</strong> R${' '}
+          {parseFloat(pedido.frete_pago || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+        </p>
+      </div>
+    </div>
+  );
+});
+
+PedidoCard.displayName = 'PedidoCard';

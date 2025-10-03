@@ -1,10 +1,8 @@
 // ========================================
-// HEADER.JS - COMPONENTE OTIMIZADO
+// HEADER.JS - COMPONENTE CORRIGIDO
 // ========================================
 // Descrição: Header com sidebar toggle + sino de notificações FCM (badge + som).
-// Integração: Hook FCM + layout count; clique limpa + redirect.
-// Melhoria: Som robusto; logs dev-only; dedup count; a11y.
-// Manutenção: Seções numeradas. Alinha PDF (anon_key para token save).
+// Correção: Usa forceRefreshToken para evitar erros de duplicata no clique do sininho.
 // ========================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -22,15 +20,14 @@ const Header = ({
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationIds, setNotificationIds] = useState(new Set()); // Dedup por ID.
   
-  // Hook FCM.
-  const { notification, token, isSupported } = useFirebaseNotifications(userId);
+  // ✅ CORREÇÃO: Adicionar forceRefreshToken do hook
+  const { notification, token, isSupported, forceRefreshToken } = useFirebaseNotifications(userId);
 
   const isDev = process.env.NODE_ENV === 'development';
 
   // ============================================================================
   // 1. EFFECT: SINCRONIZAR CONTADOR (LAYOUT + FCM, COM DEDUP)
   // ============================================================================
-  // Soma fontes sem sobreposição (usa IDs de FCM).
   useEffect(() => {
     let total = notificationCount; // Base layout.
     if (notification && notification.data?.orderId && !notificationIds.has(notification.data.orderId)) {
@@ -39,7 +36,7 @@ const Header = ({
     }
     setUnreadCount(total);
     if (isDev) console.log('🔔 Header - Sincronizando contador:', { layoutCount: notificationCount, fcmNew: !!notification, total });
-  }, [notificationCount, notification]); // Deps: sources reais.
+  }, [notificationCount, notification]);
 
   // ============================================================================
   // 2. EFFECT: ATUALIZAR CONTADOR + SOM EM NOVA FCM
@@ -101,13 +98,23 @@ const Header = ({
         layoutCount: notificationCount
       });
     }
-  }, [token, isSupported, unreadCount, notificationCount]); // Sem notification para evitar spam.
+  }, [token, isSupported, unreadCount, notificationCount]);
 
   // ============================================================================
-  // 5. HANDLER: CLIQUE NO SININHO (LIMPA + REDIRECT)
+  // 5. HANDLER: CLIQUE NO SININHO (CORRIGIDO - USA forceRefreshToken)
   // ============================================================================
-  const handleNotificationClick = useCallback(() => {
+  const handleNotificationClick = useCallback(async () => {
     if (isDev) console.log('📌 Sino clicado - Notificações:', unreadCount);
+    
+    try {
+      // ✅ CORREÇÃO: Forçar atualização do token em vez de re-inicializar
+      if (forceRefreshToken) {
+        await forceRefreshToken();
+        if (isDev) console.log('🔄 Token FCM atualizado via sininho');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao atualizar token:', error);
+    }
     
     // Limpa local.
     setUnreadCount(0);
@@ -118,7 +125,7 @@ const Header = ({
     
     // Redirect.
     window.location.href = '/pedidos-pendentes';
-  }, [unreadCount, onNotificationClick]);
+  }, [unreadCount, onNotificationClick, forceRefreshToken]); // ✅ Adicionar forceRefreshToken nas deps
 
   // Total: unreadCount (já sync'd).
   const totalNotifications = unreadCount;
@@ -163,7 +170,7 @@ const Header = ({
           <button
             onClick={handleNotificationClick}
             className="relative p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors group"
-            aria-label={`Notificações ${totalNotifications > 0 ? `(${totalNotifications} novas)` : 'Nenhuma nova'}`} // A11y dinâmico.
+            aria-label={`Notificações ${totalNotifications > 0 ? `(${totalNotifications} novas)` : 'Nenhuma nova'}`}
           >
             {/* Ícone Sino */}
             <svg className="h-6 w-6 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
