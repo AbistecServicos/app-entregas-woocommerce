@@ -62,7 +62,7 @@ export default function Login() {
   };
 
 // ============================================================================
-// 4. FUNÇÃO: LOGIN COM EMAIL/SENHA (CORRIGIDA - SEM RELOAD)
+// 4. FUNÇÃO: LOGIN COM EMAIL/SENHA (CORREÇÃO CHROME MOBILE)
 // ============================================================================
 const handleLogin = async (e) => {
   e.preventDefault();
@@ -86,7 +86,10 @@ const handleLogin = async (e) => {
       throw authError;
     }
 
-    console.log('✅ Usuário autenticado:', authData.user.email);
+    console.log('✅ Usuário autenticado:', authData.user?.email);
+
+    // ✅ CORREÇÃO: Pequeno delay para Chrome processar a sessão
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     // 4.2. VERIFICAÇÃO DE PERFIL E REDIRECIONAMENTO
     const { data: usuario, error: userError } = await supabase
@@ -129,11 +132,16 @@ const handleLogin = async (e) => {
       }
     }
 
-    // ✅ CORREÇÃO: REDIRECIONAMENTO LIMPO
+    // ✅ CORREÇÃO: Forçar reload no Chrome para atualizar sessão
     console.log('🎯 Redirecionando para:', redirectPath);
     
+    // Método 1: Router com reload suave
     await router.push(redirectPath);
-    console.log('🔄 Redirecionamento concluído com sucesso');
+    
+    // Método 2: Forçar atualização da sessão (backup)
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
     
   } catch (error) {
     // 4.3. TRATAMENTO DE ERROS AMIGÁVEL
@@ -146,18 +154,20 @@ const handleLogin = async (e) => {
 };
 
 // ============================================================================
-// 5. FUNÇÃO: LOGIN COM GOOGLE (CORRIGIDA)
+// 5. FUNÇÃO: LOGIN COM GOOGLE (CORREÇÃO CRÍTICA PARA CHROME)
 // ============================================================================
 const handleGoogleLogin = async () => {
   try {
     setLoading(true);
     setError('');
     
-    const { error } = await supabase.auth.signInWithOAuth({
+    // ✅ CORREÇÃO: Usar location.assign() para Chrome mobile
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        // ✅ CORREÇÃO: Redirecionar para página inicial, não para perfil
         redirectTo: `${window.location.origin}/`,
+        // 🔥 CORREÇÃO: Forçar fluxo completo no Chrome
+        skipBrowserRedirect: false,
       },
     });
     
@@ -165,10 +175,14 @@ const handleGoogleLogin = async () => {
     
     console.log('🔐 Redirecionando para autenticação Google...');
     
+    // ✅ CORREÇÃO: Forçar navegação no Chrome mobile
+    if (data?.url) {
+      window.location.assign(data.url);
+    }
+    
   } catch (error) {
     setError(translateError(error));
     console.error('❌ Erro no login Google:', error);
-  } finally {
     setLoading(false);
   }
 };

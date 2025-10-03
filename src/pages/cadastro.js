@@ -41,79 +41,92 @@ export default function Cadastro() {
     });
   };
 
-  // ============================================================================
-  // 3. FUNÇÃO: SUBMISSÃO DO CADASTRO (BLOCO DE FUNÇÃO ASSÍNCRONA)
-  // ============================================================================
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    setSuccess('');
+// ============================================================================
+// 3. FUNÇÃO: SUBMISSÃO DO CADASTRO (CORREÇÃO CHROME)
+// ============================================================================
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setError('');
+  setSuccess('');
 
-    // 3.1. VALIDAÇÕES
-    if (formData.password !== formData.confirmPassword) {
-      setError('As senhas não coincidem');
-      setLoading(false);
-      return;
-    }
-    if (formData.password.length < 6) {
-      setError('A senha deve ter pelo menos 6 caracteres');
-      setLoading(false);
-      return;
-    }
-    if (!formData.nome_completo.trim()) {
-      setError('O nome completo é obrigatório');
-      setLoading(false);
-      return;
-    }
-    if (!formData.telefone.trim()) {
-      setError('O telefone é obrigatório');
-      setLoading(false);
-      return;
-    }
+  // 3.1. VALIDAÇÕES (mantido igual)
+  if (formData.password !== formData.confirmPassword) {
+    setError('As senhas não coincidem');
+    setLoading(false);
+    return;
+  }
+  if (formData.password.length < 6) {
+    setError('A senha deve ter pelo menos 6 caracteres');
+    setLoading(false);
+    return;
+  }
+  if (!formData.nome_completo.trim()) {
+    setError('O nome completo é obrigatório');
+    setLoading(false);
+    return;
+  }
+  if (!formData.telefone.trim()) {
+    setError('O telefone é obrigatório');
+    setLoading(false);
+    return;
+  }
 
-    try {
-      // 3.2. CRIAÇÃO NO AUTH
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+  try {
+    // 3.2. CRIAÇÃO NO AUTH
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+      options: {
+        data: {
+          nome_completo: formData.nome_completo,
+          telefone: formData.telefone
+        },
+        // ✅ CORREÇÃO: Email redirect para Chrome
+        emailRedirectTo: `${window.location.origin}/login`
+      }
+    });
+
+    if (authError) throw authError;
+
+    // ✅ CORREÇÃO: Pequeno delay para Chrome
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // 3.3. INSERÇÃO NA TABELA USUÁRIOS
+    const { error: userError } = await supabase
+      .from('usuarios')
+      .insert({
+        uid: authData.user.id,
         email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            nome_completo: formData.nome_completo,
-            telefone: formData.telefone
-          }
-        }
+        nome_usuario: formData.email,
+        nome_completo: formData.nome_completo,
+        telefone: formData.telefone,
+        foto: '',
+        is_admin: false
       });
 
-      if (authError) throw authError;
+    if (userError) throw userError;
 
-      // 3.3. INSERÇÃO NA TABELA USUÁRIOS
-      const { error: userError } = await supabase
-        .from('usuarios')
-        .insert({
-          uid: authData.user.id,
-          email: formData.email,
-          nome_usuario: formData.email,
-          nome_completo: formData.nome_completo,
-          telefone: formData.telefone,
-          foto: '',
-          is_admin: false
-        });
-
-      if (userError) throw userError;
-
-      // 3.4. SUCESSO E REDIRECIONAMENTO
-      setSuccess('Cadastro realizado! Verifique seu email e clique no link de confirmação para fazer login.');
-      setTimeout(() => {
-        router.push('/login');
-      }, 2000);
-    } catch (error) {
-      console.error('Erro detalhado:', error);
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    // 3.4. SUCESSO E REDIRECIONAMENTO
+    setSuccess('Cadastro realizado! Verifique seu email e clique no link de confirmação para fazer login.');
+    
+    // ✅ CORREÇÃO: Redirecionamento mais robusto para Chrome
+    setTimeout(() => {
+      router.push('/login').then(() => {
+        // Forçar reload se necessário
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
+      });
+    }, 2000);
+    
+  } catch (error) {
+    console.error('Erro detalhado:', error);
+    setError(error.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ============================================================================
   // 4. RENDERIZAÇÃO DO COMPONENTE (BLOCO DE JSX)
