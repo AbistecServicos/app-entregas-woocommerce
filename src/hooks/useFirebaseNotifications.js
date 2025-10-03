@@ -304,7 +304,7 @@ const forceRefreshToken = useCallback(async () => {
   if (!isSupported || !userId) return null;
   
   try {
-    console.log('🔄 Forçando atualização do token FCM...');
+    if (isDev) console.log('🔄 Forçando atualização do token FCM...');
     
     // ✅ OBTER NOVO TOKEN
     const fcmToken = await getFCMToken();
@@ -312,10 +312,10 @@ const forceRefreshToken = useCallback(async () => {
     if (fcmToken && fcmToken !== token) {
       setToken(fcmToken);
       await saveTokenToSupabase(userId, fcmToken);
-      console.log('✅ Token FCM atualizado forçadamente');
+      if (isDev) console.log('✅ Token FCM atualizado forçadamente');
       return fcmToken;
     } else {
-      console.log('🔁 Token FCM já está atualizado');
+      if (isDev) console.log('🔁 Token FCM já está atualizado');
       return token;
     }
   } catch (error) {
@@ -323,7 +323,6 @@ const forceRefreshToken = useCallback(async () => {
     return null;
   }
 }, [userId, isSupported, getFCMToken, saveTokenToSupabase, token]);
-
 // ============================================================================
 // 11. RETORNO DO HOOK (ATUALIZADO)
 // ============================================================================

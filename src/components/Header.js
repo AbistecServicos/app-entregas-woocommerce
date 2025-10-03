@@ -101,20 +101,13 @@ const Header = ({
   }, [token, isSupported, unreadCount, notificationCount]);
 
   // ============================================================================
-  // 5. HANDLER: CLIQUE NO SININHO (CORRIGIDO - USA forceRefreshToken)
+  // 5. HANDLER: CLIQUE NO SININHO (CORRIGIDO - SEM forceRefreshToken)
   // ============================================================================
   const handleNotificationClick = useCallback(async () => {
     if (isDev) console.log('📌 Sino clicado - Notificações:', unreadCount);
     
-    try {
-      // ✅ CORREÇÃO: Forçar atualização do token em vez de re-inicializar
-      if (forceRefreshToken) {
-        await forceRefreshToken();
-        if (isDev) console.log('🔄 Token FCM atualizado via sininho');
-      }
-    } catch (error) {
-      console.error('❌ Erro ao atualizar token:', error);
-    }
+    // ✅ CORREÇÃO: Remove a tentativa de atualizar token que causava erro
+    // O token FCM já é gerenciado automaticamente pelo hook
     
     // Limpa local.
     setUnreadCount(0);
@@ -123,9 +116,9 @@ const Header = ({
     // Callback global (ex.: limpa DB unread).
     if (onNotificationClick) onNotificationClick();
     
-    // Redirect.
+    // Redirect simples e direto
     window.location.href = '/pedidos-pendentes';
-  }, [unreadCount, onNotificationClick, forceRefreshToken]); // ✅ Adicionar forceRefreshToken nas deps
+  }, [unreadCount, onNotificationClick]); // ✅ Remove forceRefreshToken das dependências
 
   // Total: unreadCount (já sync'd).
   const totalNotifications = unreadCount;
