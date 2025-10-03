@@ -102,26 +102,30 @@ export const useFirebaseNotifications = (userId) => {
     }
   }, [app]);
 
-  // ============================================================================
-  // 4. SALVAR TOKEN NO SUPABASE (IDEMPOTENTE, ORIGINAL + CHECK)
-  // ============================================================================
-  const saveTokenToSupabase = useCallback(async (userId, token) => {
-    if (!userId || !token) return false;
+// ============================================================================
+// 4. SALVAR TOKEN NO SUPABASE (CORRIGIDO - TRATA "NO ROWS")
+// ============================================================================
+const saveTokenToSupabase = useCallback(async (userId, token) => {
+  if (!userId || !token) return false;
 
-    try {
-      // Check atual para idempotência (evita upsert infinito).
-      const { data: existing } = await supabase
-        .from('user_tokens')
-        .select('token')
-        .eq('user_id', userId)
-        .single();
+  try {
+    // ✅ CORREÇÃO: Não usar .single() - usar .maybeSingle() ou tratamento de erro
+    const { data: existing, error: fetchError } = await supabase
+      .from('user_tokens')
+      .select('token')
+      .eq('user_id', userId)
+      .maybeSingle(); // ← USA maybeSingle() EM VEZ DE single()
 
-      if (existing?.token === token) {
-        if (isDev) console.log('🔄 Token FCM já salvo (sem mudança)');
-        return true;
-      }
+    // ✅ TRATAMENTO CORRETO PARA "NO ROWS"
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      // PGRST116 = no rows (não é erro real)
+      console.error('❌ Erro ao buscar token existente:', fetchError);
+      return false;
+    }
 
-      const { error } = await supabase
+    // Se existing é null (no rows) ou token é diferente, faz upsert
+    if (!existing || existing.token !== token) {
+      const { error: upsertError } = await supabase
         .from('user_tokens')
         .upsert({
           user_id: userId,
@@ -131,18 +135,23 @@ export const useFirebaseNotifications = (userId) => {
           onConflict: 'user_id,token'
         });
 
-      if (error) {
-        console.error('❌ Erro ao salvar token:', error);
+      if (upsertError) {
+        console.error('❌ Erro ao salvar token:', upsertError);
         return false;
       }
       
-      if (isDev) console.log('✅ Token FCM salvo'); // Linha 99 original.
+      if (isDev) console.log('✅ Token FCM salvo');
       return true;
-    } catch (error) {
-      console.error('❌ Erro Supabase:', error);
-      return false;
+    } else {
+      if (isDev) console.log('🔄 Token FCM já salvo (sem mudança)');
+      return true;
     }
-  }, []);
+
+  } catch (error) {
+    console.error('❌ Erro Supabase:', error);
+    return false;
+  }
+}, []);
 
 // ============================================================================
 // 5. LIMPAR TOKENS INVÁLIDOS (CORRIGIDO - COM TRATAMENTO DE ERRO)
