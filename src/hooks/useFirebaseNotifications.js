@@ -144,32 +144,61 @@ export const useFirebaseNotifications = (userId) => {
     }
   }, []);
 
-  // ============================================================================
-  // 5. LIMPAR TOKENS INVÁLIDOS (ORIGINAL, CHAMADO UMA VEZ)
-  // ============================================================================
-  const cleanupInvalidTokens = useCallback(async () => {
-    try {
-      const { data: allTokens, error } = await supabase
-        .from('user_tokens')
-        .select('*');
-      
-      if (error) return;
-
-      for (const tokenRecord of allTokens) {
-        if (tokenRecord.token.includes('fnp7RLXzTy-0dPbJ4_wv')) {
-          await supabase
-            .from('user_tokens')
-            .delete()
-            .eq('token', tokenRecord.token);
-        }
-      }
-
-      if (isDev) console.log('🧹 Tokens inválidos limpos');
-    } catch (error) {
-      console.error('❌ Erro na limpeza de tokens:', error);
+// ============================================================================
+// 5. LIMPAR TOKENS INVÁLIDOS (CORRIGIDO - COM TRATAMENTO DE ERRO)
+// ============================================================================
+const cleanupInvalidTokens = useCallback(async () => {
+  try {
+    // ✅ VERIFICAR SE USUÁRIO ESTÁ AUTENTICADO PRIMEIRO
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      if (isDev) console.log('🔐 Usuário não autenticado - pulando limpeza de tokens');
+      return;
     }
-  }, []);
 
+    // ✅ QUERY COM TRATAMENTO DE ERRO MELHORADO
+    const { data: allTokens, error } = await supabase
+      .from('user_tokens')
+      .select('*')
+      .eq('user_id', userId); // ✅ FILTRAR APENAS TOKENS DO USUÁRIO ATUAL
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // Não há tokens - isso é normal
+        return;
+      }
+      console.error('❌ Erro ao buscar tokens:', error);
+      return;
+    }
+
+    if (!allTokens || allTokens.length === 0) {
+      return; // Nenhum token para limpar
+    }
+
+    // ✅ LIMPAR APENAS TOKENS INVÁLIDOS DO USUÁRIO ATUAL
+    const deletePromises = allTokens.map(async (tokenRecord) => {
+      if (tokenRecord.token.includes('fnp7RLXzTy-0dPbJ4_wv')) {
+        const { error: deleteError } = await supabase
+          .from('user_tokens')
+          .delete()
+          .eq('id', tokenRecord.id)
+          .eq('user_id', userId); // ✅ GARANTIR que só deleta tokens do usuário
+        
+        if (deleteError) {
+          console.error('❌ Erro ao deletar token inválido:', deleteError);
+        }
+        return !deleteError;
+      }
+      return false;
+    });
+
+    await Promise.all(deletePromises);
+
+    if (isDev) console.log('🧹 Tokens inválidos limpos');
+  } catch (error) {
+    console.error('❌ Erro na limpeza de tokens:', error);
+  }
+}, [userId]); // ✅ ADICIONAR userId COMO DEPENDÊNCIA
   // ============================================================================
   // 6. INICIALIZAR NOTIFICAÇÕES (ORIGINAL, SEM LOOP)
   // ============================================================================
