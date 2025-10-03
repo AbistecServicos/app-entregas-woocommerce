@@ -3,6 +3,10 @@ import { requestForToken, onMessageListener } from '/lib/firebase';
 import { supabase } from '/lib/supabase';
 import { useUserProfile } from '../hooks/useUserProfile';
 
+// Contadores para debug
+let renderCount = 0;
+let notificationCount = 0;
+
 export default function TesteNotificacoes() {
   const [token, setToken] = useState(null);
   const [status, setStatus] = useState('Clique em um botão para começar');
@@ -10,13 +14,37 @@ export default function TesteNotificacoes() {
   const [isClient, setIsClient] = useState(false);
   const [tokensBanco, setTokensBanco] = useState([]);
   const [ultimaNotificacao, setUltimaNotificacao] = useState(null);
+  const [debugInfo, setDebugInfo] = useState({ renders: 0, notifications: 0 });
   const { userProfile } = useUserProfile();
+
+  renderCount++;
 
   useEffect(() => {
     setIsClient(true);
     setNotificationPermission(Notification.permission);
     verificarServiceWorker();
-    escutarNotificacoes();
+    
+    // Versão segura do listener
+    const cleanup = escutarNotificacoesSegura();
+    
+    // Atualiza contador a cada 10 renders
+    if (renderCount % 10 === 0) {
+      setDebugInfo(prev => ({ ...prev, renders: renderCount }));
+    }
+    
+    // Proteção contra loop infinito
+    if (renderCount > 100) {
+      console.error('🚨 POSSÍVEL LOOP DETECTADO - 100+ RENDERS');
+      return;
+    }
+    
+    // Retorna a função de cleanup
+    return () => {
+      if (cleanup && typeof cleanup === 'function') {
+        cleanup();
+        console.log('🧹 Listener de notificações limpo');
+      }
+    };
   }, []);
 
   const verificarServiceWorker = async () => {
@@ -34,9 +62,13 @@ export default function TesteNotificacoes() {
     }
   };
 
-  const escutarNotificacoes = () => {
-    onMessageListener()
-      .then((payload) => {
+  // VERSÃO SEGURA - compatível com firebase.js atual
+  const escutarNotificacoesSegura = () => {
+    try {
+      console.log('🔔 Configurando listener de notificações...');
+      
+      // Agora onMessageListener recebe um callback
+      const unsubscribe = onMessageListener((payload) => {
         console.log('📩 Notificação recebida em foreground:', payload);
         setUltimaNotificacao(payload);
         setStatus(prev => prev + `\n📩 Nova notificação: ${payload.notification?.title}`);
@@ -48,10 +80,16 @@ export default function TesteNotificacoes() {
             badge: '/icon-192x192.png'
           });
         }
-      })
-      .catch((error) => {
-        console.log('❌ Erro no listener:', error);
       });
+      
+      console.log('✅ Listener configurado com sucesso');
+      return unsubscribe;
+      
+    } catch (error) {
+      console.error('💥 Erro crítico no listener:', error);
+      setStatus(prev => prev + `\n💥 Erro: ${error.message}`);
+      return () => {}; // Retorna função vazia como fallback
+    }
   };
 
   const salvarTokenNoBanco = async (token) => {
@@ -132,9 +170,24 @@ export default function TesteNotificacoes() {
   };
 
   const testarNotificacaoSupabase = async () => {
+    // PROTEÇÃO CONTRA LOOP
+    if (notificationCount > 5) {
+      setStatus('🚨 PARANDO - Possível loop detectado (5+ notificações)');
+      return;
+    }
+    
+    notificationCount++;
+    
     try {
-      setStatus('🐛 Iniciando debug detalhado...');
+      setStatus(`🐛 Iniciando teste #${notificationCount}...`);
       
+      console.log('=== 🔍 INÍCIO DO TESTE ===');
+      console.log('Contadores:', { renders: renderCount, notifications: notificationCount });
+      
+      // DEBUG: Verificar se há múltiplos listeners
+      console.log('📞 Stack trace atual:');
+      console.trace();
+
       // DEBUG 1: Verificar usuário
       console.log('=== DEBUG 1 - USUÁRIO ===');
       console.log('👤 User ID:', userProfile?.uid);
@@ -251,7 +304,7 @@ export default function TesteNotificacoes() {
     }
   };
 
-  // 🎯 NOVA FUNÇÃO: TESTE DIRETO SUPABASE
+  // 🎯 FUNÇÃO: TESTE DIRETO SUPABASE
   const testeDiretoSupabase = async () => {
     try {
       setStatus('🎯 Teste direto Supabase...');
@@ -352,6 +405,50 @@ export default function TesteNotificacoes() {
     }
   };
 
+  const testeComportamentoLoop = async () => {
+    setStatus('🔄 Testando comportamento em loop...');
+    
+    const testLoop = async (iteration = 1) => {
+      if (iteration > 5) {
+        setStatus('🔄 TESTE CONCLUÍDO - 5 iterações sem loop crítico');
+        return;
+      }
+      
+      console.log(`🔄 Iteração ${iteration} - ${new Date().toISOString()}`);
+      setStatus(prev => prev + `\n🔄 Iteração ${iteration}`);
+      
+      // Pequeno delay entre iterações
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Chama a próxima iteração
+      testLoop(iteration + 1);
+    };
+    
+    await testLoop();
+  };
+
+  const verificarFuncoesFirebase = () => {
+    setStatus('🔍 Verificando funções Firebase...');
+    
+    console.log('=== VERIFICAÇÃO FIREBASE ===');
+    console.log('onMessageListener:', typeof onMessageListener);
+    console.log('requestForToken:', typeof requestForToken);
+    
+    if (typeof onMessageListener !== 'function') {
+      setStatus(prev => prev + '\n❌ onMessageListener não é função');
+    } else {
+      try {
+        // Testa a função
+        const result = onMessageListener(() => {});
+        console.log('Tipo do retorno:', typeof result);
+        console.log('É função?', result && typeof result === 'function');
+        setStatus(prev => prev + '\n✅ onMessageListener é função (retorna unsubscribe)');
+      } catch (error) {
+        setStatus(prev => prev + `\n❌ Erro ao testar: ${error.message}`);
+      }
+    }
+  };
+
   const buttonStyle = {
     padding: '12px 20px',
     backgroundColor: '#3b7b2b',
@@ -416,6 +513,7 @@ export default function TesteNotificacoes() {
             </span>
           </div>
           <div><strong>Service Worker:</strong> {isClient && 'serviceWorker' in navigator ? '✅' : '❌'}</div>
+          <div><strong>Renderizações:</strong> {debugInfo.renders}</div>
           <div><strong>Token FCM:</strong> {token ? '✅' : '❌'}</div>
         </div>
 
@@ -436,7 +534,7 @@ export default function TesteNotificacoes() {
         </div>
       </div>
 
-      {/* Botões de ação - COM NOVO BOTÃO ADICIONADO */}
+      {/* Botões de ação */}
       <div style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -450,7 +548,6 @@ export default function TesteNotificacoes() {
           📨 2. Testar Notificação
         </button>
         
-        {/* 🎯 NOVO BOTÃO ADICIONADO AQUI */}
         <button onClick={testeDiretoSupabase} style={buttonStyle} disabled={!userProfile?.uid}>
           🎯 Teste Direto
         </button>
@@ -459,18 +556,50 @@ export default function TesteNotificacoes() {
                 disabled={!isClient || notificationPermission !== 'granted'}>
           🔔 3. Teste Local
         </button>
+
+        {/* NOVOS BOTÕES DE DEBUG */}
+        <button onClick={verificarFuncoesFirebase} style={buttonStyleSecondary}>
+          🔍 Verificar Firebase
+        </button>
+        
+        <button onClick={testeComportamentoLoop} style={{...buttonStyle, backgroundColor: '#f59e0b'}}>
+          🔄 Teste Loop
+        </button>
+        
+        <button onClick={() => {
+          console.log('📊 STATUS ATUAL:', {
+            renderCount,
+            notificationCount, 
+            user: userProfile?.uid,
+            permission: notificationPermission,
+            timestamp: new Date().toISOString()
+          });
+          setStatus('📊 Logs enviados para console');
+        }} style={buttonStyleSecondary}>
+          📊 Status Debug
+        </button>
+        
+        <button onClick={() => {
+          renderCount = 0;
+          notificationCount = 0;
+          setDebugInfo({ renders: 0, notifications: 0 });
+          setStatus('🔃 Contadores resetados');
+        }} style={buttonStyleSecondary}>
+          🔃 Reset Contadores
+        </button>
+
         <button onClick={() => verificarTokensBanco().then(data => 
           setStatus(`📊 ${data?.length || 0} tokens no banco`))} 
                 style={buttonStyleSecondary}>
-          📊 4. Verificar Banco
+          📊 Verificar Banco
         </button>
         
         <button onClick={debugTokens} style={buttonStyleSecondary}>
-          🐛 5. Debug Tokens
+          🐛 Debug Tokens
         </button>
         
         <button onClick={limparTokens} style={buttonStyleDanger} disabled={!userProfile?.uid}>
-          🗑️ 6. Limpar Tokens
+          🗑️ Limpar Tokens
         </button>
       </div>
 
